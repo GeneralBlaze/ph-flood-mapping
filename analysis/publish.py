@@ -19,6 +19,8 @@ from analysis.run_stage2 import DATA_DIR, slugify
 
 WEB_DATA_DIR = Path(__file__).resolve().parent.parent / "web" / "data"
 COORD_DECIMALS = 5
+# geoBoundaries spellings -> names people use
+DISPLAY_NAMES = {"Port-Harcourt": "Port Harcourt"}
 HOTSPOT_FIELDS = ("area_ha", "lat", "lon", "place")
 SUSPECT_FIELDS = ("rank", "kind", "place", "area_ha", "mean_years", "anomaly_m", "buildings", "built_frac",
                   "lat", "lon", "reasons", "crossing_road")
@@ -155,7 +157,7 @@ def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
     _publish_geojson(boundary_source, web_data / slug / "boundary.geojson")
     return {
         "slug": slug,
-        "name": name,
+        "name": DISPLAY_NAMES.get(name, name),
         "boundary": f"{slug}/boundary.geojson",
         "events": [_event_entry(stage2, slug, web_data)] if stage2 else [],
         "frequency": _frequency_entry(stage3, slug, web_data) if stage3 else None,
