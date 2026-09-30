@@ -1,6 +1,6 @@
-.venv
-data
-analysis
-tests
-design-system
-*.pyc
+# Anchored to the repo root: an unanchored "data" would also drop web/data.
+/.venv
+/data
+/analysis
+/tests
+/design-system
