@@ -10,18 +10,17 @@ timeout) and reused on later runs.
 """
 
 import logging
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import ee
 
 from analysis import config
+from analysis.ee_assets import asset_exists, ensure_folder, wait_for_tasks
 from analysis.flood_detection import detect_flood
 from analysis.sar import baseline_composite, event_image, scene_dates
 from analysis.seasons import season_windows
 
 log = logging.getLogger(__name__)
-TASK_POLL_INTERVAL_S = 30
 
 
 def classify_scene(region: ee.Geometry, baseline: ee.Image, day: str, orbit: int) -> ee.Image:
@@ -67,28 +66,13 @@ def asset_id(lga_slug: str, year: int) -> str:
     return f"projects/{config.EE_PROJECT}/assets/{lga_slug}/stage3_{year}"
 
 
-def _ensure_folder(path: str) -> None:
-    try:
-        ee.data.getAsset(path)
-    except ee.EEException:
-        ee.data.createFolder(path)
-
-
-def _asset_exists(path: str) -> bool:
-    try:
-        ee.data.getAsset(path)
-        return True
-    except ee.EEException:
-        return False
-
-
 def export_years(region: ee.Geometry, lga_slug: str, years: list[int], orbits: list[int]) -> None:
     """Start export tasks for years without an asset, then wait for all of them."""
-    _ensure_folder(f"projects/{config.EE_PROJECT}/assets/{lga_slug}")
+    ensure_folder(f"projects/{config.EE_PROJECT}/assets/{lga_slug}")
     tasks = []
     for year in years:
         target = asset_id(lga_slug, year)
-        if _asset_exists(target):
+        if asset_exists(target):
             log.info("%d: cached asset found", year)
             continue
         log.info("%d: classifying scenes", year)
@@ -102,22 +86,7 @@ def export_years(region: ee.Geometry, lga_slug: str, years: list[int], orbits: l
         )
         task.start()
         tasks.append((year, task))
-    _wait_for(tasks)
-
-
-def _wait_for(tasks: list) -> None:
-    pending = dict(tasks)
-    while pending:
-        for year, task in list(pending.items()):
-            status = task.status()
-            state = status["state"]
-            if state == "COMPLETED":
-                log.info("%d: export complete", year)
-                del pending[year]
-            elif state in ("FAILED", "CANCELLED"):
-                raise RuntimeError(f"Export for {year} {state}: {status.get('error_message')}")
-        if pending:
-            time.sleep(TASK_POLL_INTERVAL_S)
+    wait_for_tasks(tasks)
 
 
 def remove_specks(mask: ee.Image, min_pixels: int) -> ee.Image:

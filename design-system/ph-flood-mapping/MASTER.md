@@ -31,11 +31,15 @@ Line-height 1.55 body, 1.1 display. Max line length 62ch. Labels: uppercase, 0.0
 | `--accent` | #0369A1 | #63BDF2 | Links, focus, active control |
 | `--signal` | #C2410C | #F2914F | Hotspot markers & ranks (always numbered) |
 | `--event` | #1F6FFF | #1F6FFF | Single flood event overlay |
+| `--channel` | #0891B2 | #22D3EE | Expected drainage channels (teal, never blue) |
 
 Recurring-flood ramp (years flooded 1→6, single-hue, CVD-safe, labelled 1–6 in legend):
 `#D6E6F4 #A8CBE8 #6FA8D6 #3A82C0 #1A5A9A #0B3470`
 
 Only one flood layer (recurring *or* event) is shown at a time, so the two blues never compete.
+
+Height-above-drainage ramp (earth tones — **blue is reserved for water**), 0 m → 10 m+:
+`#F7F1E1 #E8D8B0 #D4B97F #B8925A #8C5A2B #5C3A1C`
 
 ## Space, shape, depth
 - Spacing (4px base): 4 · 8 · 12 · 16 · 24 · 32 · 48. Section rhythm 24/32, not uniform.

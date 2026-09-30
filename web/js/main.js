@@ -1,7 +1,7 @@
 import { el } from "./dom.js";
 import { formatDate } from "./format.js";
 import { createMap } from "./map.js";
-import { renderFigure, renderHotspots, renderLayerControls, renderLgaSelect } from "./panel.js";
+import { renderFigure, renderHotspots, renderLayerControls, renderLgaSelect, renderTerrainControls } from "./panel.js";
 import { defaultLayer, isLayerAvailable, readState, writeState } from "./state.js";
 
 const DATA_ROOT = "data/";
@@ -92,15 +92,20 @@ async function start() {
     });
     renderLayerControls($("layer-controls"), lga, state.layer, (layer) => setState({ layer }));
     renderFigure($("figure"), $("legend"), lga, state.layer);
+    renderTerrainControls($("drainage-toggle"), $("hand-toggle"), $("terrain-legend"), lga, state);
+    const terrain = lga.terrain;
+    map.showHand(terrain && state.hand ? DATA_ROOT + terrain.hand_overlay : null, terrain?.hand_bounds);
     map.showOverlay(data ? DATA_ROOT + data.overlay : null, data?.bounds, data?.alt);
     if (refit && (data?.bounds || lga.events[0]?.bounds)) map.fitTo(data?.bounds ?? lga.events[0].bounds);
 
     try {
-      const [boundary, hotspots] = await Promise.all([
+      const [boundary, hotspots, drainage] = await Promise.all([
         fetchJson(lga.boundary),
         data ? fetchJson(data.hotspots) : Promise.resolve([]),
+        terrain && state.drainage ? fetchJson(terrain.drainage) : Promise.resolve(null),
       ]);
       if (token !== renderToken) return;
+      map.showDrainage(drainage);
       map.showBoundary(boundary, state.boundary);
       map.showHotspots(hotspots, data?.subtitle ?? "");
       renderHotspots($("hotspots"), $("hotspots-heading"), hotspots, state.layer, (h) =>
@@ -113,6 +118,8 @@ async function start() {
 
   $("boundary-toggle").checked = state.boundary;
   $("boundary-toggle").addEventListener("change", (e) => setState({ boundary: e.target.checked }));
+  $("drainage-toggle").addEventListener("change", (e) => setState({ drainage: e.target.checked }));
+  $("hand-toggle").addEventListener("change", (e) => setState({ hand: e.target.checked }));
   render(true);
 }
 

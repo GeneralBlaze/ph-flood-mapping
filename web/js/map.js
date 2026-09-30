@@ -5,6 +5,7 @@ const PH_CENTRE = [4.82, 7.0];
 const START_ZOOM = 11;
 const HOTSPOT_ZOOM = 15;
 const OVERLAY_OPACITY = 0.85;
+const HAND_OPACITY = 0.6;
 const BASEMAP_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const BASEMAP_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
@@ -27,8 +28,11 @@ export function createMap(container) {
   // Dark mode darkens the tiles with a CSS filter (see .basemap-tiles in app.css).
   L.tileLayer(BASEMAP_URL, { attribution: BASEMAP_ATTRIBUTION, maxZoom: 19, className: "basemap-tiles" }).addTo(map);
 
+  // Creation order sets stacking: terrain shading < flood overlay < channels < boundary < hotspots.
   const groups = {
+    hand: L.layerGroup().addTo(map),
     overlay: L.layerGroup().addTo(map),
+    drainage: L.layerGroup().addTo(map),
     boundary: L.layerGroup().addTo(map),
     hotspots: L.layerGroup().addTo(map),
   };
@@ -49,6 +53,21 @@ export function createMap(container) {
     showOverlay(url, bounds, alt) {
       groups.overlay.clearLayers();
       if (url) L.imageOverlay(url, bounds, { opacity: OVERLAY_OPACITY, alt }).addTo(groups.overlay);
+    },
+
+    showHand(url, bounds) {
+      groups.hand.clearLayers();
+      if (url) L.imageOverlay(url, bounds, { opacity: HAND_OPACITY, alt: "Height above drainage" }).addTo(groups.hand);
+    },
+
+    showDrainage(geojson) {
+      groups.drainage.clearLayers();
+      if (!geojson) return;
+      const colour = cssVar("--channel");
+      L.geoJSON(geojson, {
+        style: { color: colour, weight: 1, fillColor: colour, fillOpacity: 0.85 },
+        interactive: false,
+      }).addTo(groups.drainage);
     },
 
     showBoundary(geojson, visible) {

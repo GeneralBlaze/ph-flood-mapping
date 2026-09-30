@@ -513,3 +513,46 @@ a {
 .label--spaced {
   margin-top: 0;
 }
+
+/* Terrain toggles */
+.terrain {
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.check__text {
+  display: grid;
+}
+
+.check__note {
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+.terrain .check {
+  align-items: flex-start;
+  padding: var(--space-2) 0;
+}
+
+.terrain .check input {
+  margin-top: 3px;
+}
+
+.hand-legend {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.hand-legend__bar {
+  height: 12px;
+  background: var(--hand-gradient);
+}
+
+.hand-legend__ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-label);
+  color: var(--ink-muted);
+}

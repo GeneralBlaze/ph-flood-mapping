@@ -106,10 +106,26 @@ def _frequency_entry(stage3: Path, slug: str, web_data: Path) -> dict[str, Any]:
     }
 
 
+def _terrain_entry(stage4: Path, slug: str, web_data: Path) -> dict[str, Any]:
+    summary = _read(stage4 / "summary.json")
+    overlay = f"{slug}/hand.png"
+    drainage = f"{slug}/drainage_network.geojson"
+    (web_data / slug).mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(stage4 / "hand_overlay.png", web_data / overlay)
+    _publish_geojson(stage4 / "drainage_network.geojson", web_data / drainage)
+    return {
+        "channel_upa_km2": summary["channel_upa_km2"],
+        "hand_overlay": overlay,
+        "hand_bounds": _read(stage4 / "hand_overlay.bounds.json"),
+        "drainage": drainage,
+    }
+
+
 def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
     slug = lga_dir.name
     stage2 = _latest(lga_dir, "stage2_*")
     stage3 = _latest(lga_dir, "stage3_*")
+    stage4 = _latest(lga_dir, "stage4_*")
     if stage2 is None and stage3 is None:
         raise ValueError(f"No finished outputs in {lga_dir}")
 
@@ -121,6 +137,7 @@ def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
         "boundary": f"{slug}/boundary.geojson",
         "events": [_event_entry(stage2, slug, web_data)] if stage2 else [],
         "frequency": _frequency_entry(stage3, slug, web_data) if stage3 else None,
+        "terrain": _terrain_entry(stage4, slug, web_data) if stage4 else None,
     }
 
 

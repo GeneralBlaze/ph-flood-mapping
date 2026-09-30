@@ -54,6 +54,25 @@
             <input type="checkbox" id="boundary-toggle" checked />
             <span>Show LGA boundary</span>
           </label>
+
+          <fieldset class="terrain" id="terrain-controls">
+            <legend class="label">Terrain</legend>
+            <label class="check">
+              <input type="checkbox" id="drainage-toggle" />
+              <span class="check__text">
+                Expected drainage channels
+                <span class="check__note">Where the land says water should flow</span>
+              </span>
+            </label>
+            <label class="check">
+              <input type="checkbox" id="hand-toggle" />
+              <span class="check__text">
+                Height above drainage
+                <span class="check__note">How far water must rise to reach a channel</span>
+              </span>
+            </label>
+            <div id="terrain-legend"></div>
+          </fieldset>
         </section>
 
         <section class="section" aria-labelledby="figure-heading" aria-live="polite">
@@ -98,7 +117,7 @@
           </p>
           <p>
             Contains modified Copernicus Sentinel data (ESA). JRC Global Surface Water (EC JRC/Google). MERIT Hydro
-            (CC-BY-NC 4.0). Boundaries: geoBoundaries (CC-BY 4.0). Place names and basemap © OpenStreetMap
+            (CC-BY-NC 4.0). FABDEM (CC BY-NC-SA 4.0); terrain layers derived from it share that licence. Boundaries: geoBoundaries (CC-BY 4.0). Place names and basemap © OpenStreetMap
             contributors.
           </p>
           <p id="generated"></p>

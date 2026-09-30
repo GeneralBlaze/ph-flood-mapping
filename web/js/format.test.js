@@ -38,20 +38,31 @@ test("keyFigure for frequency sums hectares at or above the repeat threshold", (
 });
 
 test("readState defaults to first LGA and the best available layer", () => {
-  assert.deepEqual(readState("", manifest), { lga: "obio-akpor", layer: "event", boundary: true });
-  assert.deepEqual(readState("?lga=port-harcourt", manifest), { lga: "port-harcourt", layer: "frequency", boundary: true });
+  assert.deepEqual(readState("", manifest), { lga: "obio-akpor", layer: "event", boundary: true, drainage: false, hand: false });
+  assert.deepEqual(readState("?lga=port-harcourt", manifest), { lga: "port-harcourt", layer: "frequency", boundary: true, drainage: false, hand: false });
 });
 
 test("readState rejects unknown or unavailable values", () => {
-  assert.deepEqual(readState("?lga=nowhere&layer=frequency", manifest), { lga: "obio-akpor", layer: "event", boundary: true });
+  assert.deepEqual(readState("?lga=nowhere&layer=frequency", manifest), { lga: "obio-akpor", layer: "event", boundary: true, drainage: false, hand: false });
   assert.deepEqual(readState("?layer=<script>", manifest).layer, "event");
 });
 
 test("readState honours layer=none and boundary=0", () => {
-  assert.deepEqual(readState("?layer=none&boundary=0", manifest), { lga: "obio-akpor", layer: "none", boundary: false });
+  assert.deepEqual(readState("?layer=none&boundary=0", manifest), { lga: "obio-akpor", layer: "none", boundary: false, drainage: false, hand: false });
 });
 
 test("writeState produces a stable query string", () => {
-  assert.equal(writeState({ lga: "obio-akpor", layer: "event", boundary: true }), "?lga=obio-akpor&layer=event");
-  assert.equal(writeState({ lga: "obio-akpor", layer: "none", boundary: false }), "?lga=obio-akpor&layer=none&boundary=0");
+  assert.equal(writeState({ lga: "obio-akpor", layer: "event", boundary: true, drainage: false, hand: false }), "?lga=obio-akpor&layer=event");
+  assert.equal(writeState({ lga: "obio-akpor", layer: "none", boundary: false, drainage: false, hand: false }), "?lga=obio-akpor&layer=none&boundary=0");
+});
+
+test("readState reads terrain toggles", () => {
+  const state = readState("?drainage=1&hand=1", manifest);
+  assert.equal(state.drainage, true);
+  assert.equal(state.hand, true);
+});
+
+test("writeState includes only enabled terrain toggles", () => {
+  const query = writeState({ lga: "obio-akpor", layer: "event", boundary: true, drainage: true, hand: false });
+  assert.equal(query, "?lga=obio-akpor&layer=event&drainage=1");
 });

@@ -1,4 +1,4 @@
-// Shareable view state lives in the URL: ?lga=<slug>&layer=frequency|event|none&boundary=0
+// Shareable view state lives in the URL: ?lga=<slug>&layer=frequency|event|none&boundary=0&drainage=1&hand=1
 
 const LAYERS = ["frequency", "event", "none"];
 
@@ -23,11 +23,19 @@ export function readState(search, manifest) {
   const lga = manifest.lgas.find((l) => l.slug === params.get("lga")) ?? manifest.lgas[0];
   const requested = params.get("layer");
   const layer = isLayerAvailable(lga, requested) ? requested : defaultLayer(lga);
-  return { lga: lga.slug, layer, boundary: params.get("boundary") !== "0" };
+  return {
+    lga: lga.slug,
+    layer,
+    boundary: params.get("boundary") !== "0",
+    drainage: params.get("drainage") === "1",
+    hand: params.get("hand") === "1",
+  };
 }
 
 export function writeState(state) {
   const params = new URLSearchParams({ lga: state.lga, layer: state.layer });
   if (!state.boundary) params.set("boundary", "0");
+  if (state.drainage) params.set("drainage", "1");
+  if (state.hand) params.set("hand", "1");
   return `?${params.toString()}`;
 }

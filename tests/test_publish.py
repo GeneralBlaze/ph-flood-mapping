@@ -58,3 +58,30 @@ def test_manifest_lists_entries(tmp_path):
     manifest = json.loads(path.read_text())
     assert manifest["lgas"][0]["slug"] == "obio-akpor"
     assert "generated" in manifest
+
+
+def test_entry_includes_terrain_when_stage4_exists(stage2_dir, tmp_path):
+    # Arrange
+    stage4 = stage2_dir.parent / "stage4_terrain"
+    _write(stage4 / "summary.json", {"channel_upa_km2": 1.0})
+    _write(stage4 / "hand_overlay.bounds.json", [[4.7, 6.9], [4.95, 7.1]])
+    (stage4 / "hand_overlay.png").write_bytes(b"png")
+    _write(stage4 / "drainage_network.geojson", {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"label": 1},
+         "geometry": {"type": "Polygon", "coordinates": [[[7.1234567, 4.8], [7.2, 4.8], [7.2, 4.9], [7.1234567, 4.8]]]}}]})
+    web_data = tmp_path / "web" / "data"
+
+    # Act
+    entry = build_lga_entry(stage2_dir.parent, "Obio/Akpor", web_data)
+
+    # Assert
+    terrain = entry["terrain"]
+    assert terrain["channel_upa_km2"] == 1.0
+    assert (web_data / terrain["hand_overlay"]).exists()
+    network = json.loads((web_data / terrain["drainage"]).read_text())
+    assert network["features"][0]["geometry"]["coordinates"][0][0] == [7.12346, 4.8]
+
+
+def test_entry_terrain_is_none_without_stage4(stage2_dir, tmp_path):
+    entry = build_lga_entry(stage2_dir.parent, "Obio/Akpor", tmp_path / "web" / "data")
+    assert entry["terrain"] is None

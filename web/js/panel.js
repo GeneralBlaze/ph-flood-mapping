@@ -119,3 +119,21 @@ export function renderHotspots(list, heading, hotspots, layer, onSelect) {
     )
   );
 }
+
+export function renderTerrainControls(drainageBox, handBox, legendEl, lga, state) {
+  const available = Boolean(lga.terrain);
+  drainageBox.disabled = !available;
+  handBox.disabled = !available;
+  drainageBox.checked = available && state.drainage;
+  handBox.checked = available && state.hand;
+  if (!available || !state.hand) {
+    legendEl.replaceChildren();
+    return;
+  }
+  legendEl.replaceChildren(
+    el("div", { class: "hand-legend" }, [
+      el("span", { class: "hand-legend__bar", "aria-hidden": "true" }),
+      el("span", { class: "hand-legend__ends" }, [el("span", { text: "0 m · at a channel" }), el("span", { text: "10 m+ · raised" })]),
+    ])
+  );
+}

@@ -37,3 +37,12 @@ YEAR_MIN_PATCH_PIXELS = 10            # drop isolated specks from each year's fl
 REPEAT_MIN_PATCH_PIXELS = 50          # repeat-flood areas smaller than ~0.5 ha are not vectorised
 REPEAT_MIN_YEARS = 3                  # "repeat offender" = flooded in at least this many years
 EE_WORKERS = 6                        # parallel Earth Engine requests when thresholding scenes
+
+# Stage 4 drainage modelling
+WORKING_CRS = "EPSG:32632"            # UTM 32N, metric grid for Port Harcourt
+TERRAIN_SCALE_M = 30
+HYDRO_BUFFER_M = 10_000               # model the catchment around the LGA, not just inside it
+CHANNEL_UPA_KM2 = 1.0                 # upstream area that makes a cell an expected channel
+MAX_CHANNEL_DISTANCE_PX = 256         # ~7.7 km at 30 m; beyond this distance is capped
+HOLLOW_RADIUS_M = 250                 # neighbourhood for local-hollow detection
+CHANNEL_SEARCH_M = 1000              # search radius for the nearest channel in FABDEM-based HAND
