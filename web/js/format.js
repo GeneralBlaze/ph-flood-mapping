@@ -24,6 +24,13 @@ function repeatHectares(frequency) {
 }
 
 export function keyFigure(lga, layer) {
+  if (layer === "suspects" && lga.suspects) {
+    const n = lga.suspects.counts.suspect;
+    return {
+      value: `${n} ${n === 1 ? "site" : "sites"}`,
+      caption: "built-up places that keep flooding where the land says water should drain away",
+    };
+  }
   if (layer === "frequency" && lga.frequency) {
     const f = lga.frequency;
     return {

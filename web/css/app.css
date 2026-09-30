@@ -556,3 +556,36 @@ a {
   font-size: var(--text-label);
   color: var(--ink-muted);
 }
+
+/* Suspects */
+.legend__swatch--suspect {
+  background: var(--signal);
+  opacity: 0.8;
+}
+
+.popup__label {
+  margin-top: var(--space-3) !important;
+  font-size: var(--text-label) !important;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.popup__reasons {
+  margin: var(--space-1) 0 var(--space-2);
+  padding-left: 1.1em;
+  font-size: var(--text-small);
+  color: var(--ink);
+}
+
+.popup__reasons li + li {
+  margin-top: var(--space-1);
+}
+
+.popup__caveat {
+  padding: var(--space-2);
+  margin: var(--space-2) 0 !important;
+  font-size: var(--text-label) !important;
+  background: var(--paper-2);
+  border-left: 3px solid var(--signal);
+}

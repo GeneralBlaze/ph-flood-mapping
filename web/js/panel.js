@@ -22,8 +22,19 @@ export function renderLayerControls(fieldset, lga, layer, onChange) {
   const legend = fieldset.querySelector("legend");
   const event = lga.events[0];
   const f = lga.frequency;
+  const suspects = lga.suspects;
   fieldset.replaceChildren(
     legend,
+    layerOption(
+      "suspects",
+      "Suspected drainage problems",
+      suspects
+        ? `${suspects.counts.suspect} built-up places to check on the ground, ranked`
+        : "Not yet analysed for this area",
+      layer === "suspects",
+      !suspects,
+      onChange
+    ),
     layerOption(
       "frequency",
       "Floods year after year",
@@ -68,6 +79,23 @@ function frequencyLegend(frequency) {
   ]);
 }
 
+function suspectsLegend(counts) {
+  return el("div", { class: "legend" }, [
+    el("p", { class: "legend__caption" }, [
+      el("span", { class: "legend__swatch legend__swatch--suspect", "aria-hidden": "true" }),
+      "Suspected site, numbered by priority. Faint blue beneath shows how often each place flooded.",
+    ]),
+    el("p", {
+      class: "legend__caption",
+      text:
+        `Of all places that flood year after year, ${counts.natural} are natural floodplain or wetland and ` +
+        `${counts.unclear} are unclear (open land, or too small to measure). Only built-up places are flagged.`,
+    }),
+  ]);
+}
+
+const KIND_LABELS = { raised_ground: "Raised ground", road_crossing: "Road crossing" };
+
 function eventLegend(date) {
   return el("p", { class: "legend__caption" }, [
     el("span", { class: "legend__swatch", "aria-hidden": "true" }),
@@ -83,13 +111,18 @@ export function renderFigure(figureEl, legendEl, lga, layer) {
       el("span", { class: "figure__caption", text: figure.caption }),
     ])
   );
-  if (layer === "frequency" && lga.frequency) legendEl.replaceChildren(frequencyLegend(lga.frequency));
+  if (layer === "suspects" && lga.suspects) legendEl.replaceChildren(suspectsLegend(lga.suspects.counts));
+  else if (layer === "frequency" && lga.frequency) legendEl.replaceChildren(frequencyLegend(lga.frequency));
   else if (layer === "event" && lga.events[0]) legendEl.replaceChildren(eventLegend(lga.events[0].date));
   else legendEl.replaceChildren();
 }
 
 export function renderHotspots(list, heading, hotspots, layer, onSelect) {
-  heading.textContent = layer === "frequency" ? "Places that flood year after year" : "Largest flooded areas";
+  const headings = {
+    suspects: "Check these first",
+    frequency: "Places that flood year after year",
+  };
+  heading.textContent = headings[layer] ?? "Largest flooded areas";
   if (!hotspots.length) {
     list.replaceChildren(el("li", { class: "status", text: "No flooded areas to list for this layer." }));
     return;
@@ -112,7 +145,7 @@ export function renderHotspots(list, heading, hotspots, layer, onSelect) {
           [
             el("span", { class: "hotspot__rank", text: String(h.rank) }),
             el("span", { class: "hotspot__place", text: h.place }),
-            el("span", { class: "hotspot__area", text: formatHectares(h.area_ha) }),
+            el("span", { class: "hotspot__area", text: h.kind ? KIND_LABELS[h.kind] : formatHectares(h.area_ha) }),
           ]
         ),
       ])

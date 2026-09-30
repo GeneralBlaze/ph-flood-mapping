@@ -66,3 +66,26 @@ test("writeState includes only enabled terrain toggles", () => {
   const query = writeState({ lga: "obio-akpor", layer: "event", boundary: true, drainage: true, hand: false });
   assert.equal(query, "?lga=obio-akpor&layer=event&drainage=1");
 });
+
+const withSuspects = {
+  lgas: [
+    {
+      slug: "obio-akpor",
+      name: "Obio/Akpor",
+      frequency: { years: [2021, 2026], repeat_min_years: 3, hectares_by_years_flooded: { 3: 10 } },
+      events: [{ date: "2026-09-29", flooded_ha: 1118.4 }],
+      suspects: { counts: { suspect: 30, natural: 86, unclear: 105 }, list: "x", areas: "y" },
+    },
+  ],
+};
+
+test("suspects layer is the default when available", () => {
+  assert.equal(readState("", withSuspects).layer, "suspects");
+  assert.equal(readState("", manifest).layer, "event");
+});
+
+test("keyFigure for suspects counts sites", () => {
+  const figure = keyFigure(withSuspects.lgas[0], "suspects");
+  assert.equal(figure.value, "30 sites");
+  assert.match(figure.caption, /should drain/);
+});

@@ -85,3 +85,31 @@ def test_entry_includes_terrain_when_stage4_exists(stage2_dir, tmp_path):
 def test_entry_terrain_is_none_without_stage4(stage2_dir, tmp_path):
     entry = build_lga_entry(stage2_dir.parent, "Obio/Akpor", tmp_path / "web" / "data")
     assert entry["terrain"] is None
+
+
+def test_entry_includes_suspects_with_public_fields_only(stage2_dir, tmp_path):
+    # Arrange
+    stage5 = stage2_dir.parent / "stage5_suspects"
+    _write(stage5 / "summary.json", {"categories": {"suspect": 1, "natural": 2, "unclear": 3}})
+    _write(stage5 / "suspects.json", [{
+        "rank": 1, "kind": "raised_ground", "place": "Oginigba", "area_ha": 3.5, "mean_years": 3.4,
+        "anomaly_m": 9.93, "buildings": 30, "built_frac": 1.0, "lat": 4.8, "lon": 7.03,
+        "reasons": ["r1"], "crossing_road": None, "score": 33.8, "address": {"secret": "x"}}])
+    square = [[[7.0, 4.8], [7.001, 4.8], [7.001, 4.801], [7.0, 4.8]]]
+    _write(stage5 / "patches.geojson", {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"category": "suspect", "rank": 1}, "geometry": {"type": "Polygon", "coordinates": square}},
+        {"type": "Feature", "properties": {"category": "natural", "rank": None}, "geometry": {"type": "Polygon", "coordinates": square}},
+    ]})
+    web_data = tmp_path / "web" / "data"
+
+    # Act
+    entry = build_lga_entry(stage2_dir.parent, "Obio/Akpor", web_data)
+
+    # Assert
+    suspects = entry["suspects"]
+    assert suspects["counts"] == {"suspect": 1, "natural": 2, "unclear": 3}
+    listed = json.loads((web_data / suspects["list"]).read_text())
+    assert "address" not in listed[0] and "score" not in listed[0]
+    assert listed[0]["anomaly_m"] == 9.9
+    areas = json.loads((web_data / suspects["areas"]).read_text())
+    assert [f["properties"] for f in areas["features"]] == [{"rank": 1}]

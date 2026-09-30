@@ -29,10 +29,15 @@ def fetch_places(bbox: tuple[float, float, float, float]) -> list[dict[str, Any]
         f'node["place"~"^({PLACE_TYPES})$"]["name"]({south},{west},{north},{east});'
         "out body;"
     )
+    return parse_overpass_places(query_overpass(query))
+
+
+def query_overpass(query: str) -> dict[str, Any]:
+    """Run an Overpass QL query, trying each mirror in turn."""
     errors = []
     for url in OVERPASS_URLS:
         try:
-            return parse_overpass_places(_post_overpass(url, query))
+            return _post_overpass(url, query)
         except (OSError, json.JSONDecodeError) as exc:
             errors.append(f"{url}: {exc}")
     raise RuntimeError("All Overpass mirrors failed: " + "; ".join(errors))

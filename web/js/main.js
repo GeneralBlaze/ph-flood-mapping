@@ -34,6 +34,18 @@ function showError(message) {
 }
 
 function layerData(lga, layer) {
+  if (layer === "suspects" && lga.suspects) {
+    const base = lga.frequency;
+    return {
+      overlay: base?.overlay,
+      bounds: base?.bounds,
+      hotspots: lga.suspects.list,
+      areas: lga.suspects.areas,
+      subtitle: "that floods where it should drain",
+      alt: "Suspected drainage problems over years flooded",
+      overlayOpacity: 0.35,
+    };
+  }
   if (layer === "frequency" && lga.frequency) {
     return { ...lga.frequency, subtitle: `flooded in ${lga.frequency.repeat_min_years}+ seasons`, alt: "Years flooded" };
   }
@@ -95,17 +107,19 @@ async function start() {
     renderTerrainControls($("drainage-toggle"), $("hand-toggle"), $("terrain-legend"), lga, state);
     const terrain = lga.terrain;
     map.showHand(terrain && state.hand ? DATA_ROOT + terrain.hand_overlay : null, terrain?.hand_bounds);
-    map.showOverlay(data ? DATA_ROOT + data.overlay : null, data?.bounds, data?.alt);
+    map.showOverlay(data?.overlay ? DATA_ROOT + data.overlay : null, data?.bounds, data?.alt, data?.overlayOpacity);
     if (refit && (data?.bounds || lga.events[0]?.bounds)) map.fitTo(data?.bounds ?? lga.events[0].bounds);
 
     try {
-      const [boundary, hotspots, drainage] = await Promise.all([
+      const [boundary, hotspots, drainage, suspectAreas] = await Promise.all([
         fetchJson(lga.boundary),
         data ? fetchJson(data.hotspots) : Promise.resolve([]),
         terrain && state.drainage ? fetchJson(terrain.drainage) : Promise.resolve(null),
+        data?.areas ? fetchJson(data.areas) : Promise.resolve(null),
       ]);
       if (token !== renderToken) return;
       map.showDrainage(drainage);
+      map.showSuspectAreas(suspectAreas);
       map.showBoundary(boundary, state.boundary);
       map.showHotspots(hotspots, data?.subtitle ?? "");
       renderHotspots($("hotspots"), $("hotspots-heading"), hotspots, state.layer, (h) =>

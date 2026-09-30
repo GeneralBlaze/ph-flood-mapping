@@ -1,9 +1,10 @@
-// Shareable view state lives in the URL: ?lga=<slug>&layer=frequency|event|none&boundary=0&drainage=1&hand=1
+// Shareable view state lives in the URL: ?lga=<slug>&layer=suspects|frequency|event|none&boundary=0&drainage=1&hand=1
 
-const LAYERS = ["frequency", "event", "none"];
+const LAYERS = ["suspects", "frequency", "event", "none"];
 
 function availableLayers(lga) {
   return LAYERS.filter((layer) => {
+    if (layer === "suspects") return Boolean(lga.suspects);
     if (layer === "frequency") return Boolean(lga.frequency);
     if (layer === "event") return lga.events.length > 0;
     return true;

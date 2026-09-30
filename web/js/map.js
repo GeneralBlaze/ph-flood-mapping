@@ -14,11 +14,22 @@ function cssVar(name) {
 }
 
 function hotspotPopup(hotspot, subtitle) {
-  return el("div", { class: "popup" }, [
+  const children = [
     el("h3", { text: `${hotspot.rank}. ${hotspot.place}` }),
     el("p", { text: `${formatHectares(hotspot.area_ha)} ${subtitle}` }),
-    el("p", { text: `${hotspot.lat.toFixed(4)}, ${hotspot.lon.toFixed(4)}` }),
-  ]);
+  ];
+  if (hotspot.reasons) {
+    children.push(
+      el("p", { class: "popup__label", text: "Why it was flagged" }),
+      el("ul", { class: "popup__reasons" }, hotspot.reasons.map((r) => el("li", { text: r }))),
+      el("p", {
+        class: "popup__caveat",
+        text: "A lead, not a verdict: it could also be a pond, a building site or smooth paving that looks like water to radar. Check on the ground.",
+      })
+    );
+  }
+  children.push(el("p", { text: `${hotspot.lat.toFixed(4)}, ${hotspot.lon.toFixed(4)}` }));
+  return el("div", { class: "popup" }, children);
 }
 
 export function createMap(container) {
@@ -33,6 +44,7 @@ export function createMap(container) {
     hand: L.layerGroup().addTo(map),
     overlay: L.layerGroup().addTo(map),
     drainage: L.layerGroup().addTo(map),
+    suspects: L.layerGroup().addTo(map),
     boundary: L.layerGroup().addTo(map),
     hotspots: L.layerGroup().addTo(map),
   };
@@ -50,9 +62,9 @@ export function createMap(container) {
       });
     },
 
-    showOverlay(url, bounds, alt) {
+    showOverlay(url, bounds, alt, opacity = OVERLAY_OPACITY) {
       groups.overlay.clearLayers();
-      if (url) L.imageOverlay(url, bounds, { opacity: OVERLAY_OPACITY, alt }).addTo(groups.overlay);
+      if (url) L.imageOverlay(url, bounds, { opacity, alt }).addTo(groups.overlay);
     },
 
     showHand(url, bounds) {
@@ -68,6 +80,16 @@ export function createMap(container) {
         style: { color: colour, weight: 1, fillColor: colour, fillOpacity: 0.85 },
         interactive: false,
       }).addTo(groups.drainage);
+    },
+
+    showSuspectAreas(geojson) {
+      groups.suspects.clearLayers();
+      if (!geojson) return;
+      const colour = cssVar("--signal");
+      L.geoJSON(geojson, {
+        style: { color: colour, weight: 2, fillColor: colour, fillOpacity: 0.35 },
+        interactive: false,
+      }).addTo(groups.suspects);
     },
 
     showBoundary(geojson, visible) {
@@ -93,7 +115,7 @@ export function createMap(container) {
           title: `${hotspot.rank}. ${hotspot.place}`,
           keyboard: true,
         })
-          .bindPopup(() => hotspotPopup(hotspot, subtitle))
+          .bindPopup(() => hotspotPopup(hotspot, subtitle), { maxWidth: 320 })
           .addTo(groups.hotspots);
         markers.set(hotspot.rank, marker);
       }

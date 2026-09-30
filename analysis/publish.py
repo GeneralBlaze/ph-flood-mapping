@@ -20,6 +20,8 @@ from analysis.run_stage2 import DATA_DIR, slugify
 WEB_DATA_DIR = Path(__file__).resolve().parent.parent / "web" / "data"
 COORD_DECIMALS = 5
 HOTSPOT_FIELDS = ("area_ha", "lat", "lon", "place")
+SUSPECT_FIELDS = ("rank", "kind", "place", "area_ha", "mean_years", "anomaly_m", "buildings", "built_frac",
+                  "lat", "lon", "reasons", "crossing_road")
 log = logging.getLogger(__name__)
 
 
@@ -121,11 +123,31 @@ def _terrain_entry(stage4: Path, slug: str, web_data: Path) -> dict[str, Any]:
     }
 
 
+def _suspects_entry(stage5: Path, slug: str, web_data: Path) -> dict[str, Any]:
+    summary = _read(stage5 / "summary.json")
+    listed = f"{slug}/suspects.json"
+    areas = f"{slug}/suspect_areas.geojson"
+    public = [
+        {**{k: s[k] for k in SUSPECT_FIELDS}, "anomaly_m": round(s["anomaly_m"], 1), "mean_years": round(s["mean_years"], 1)}
+        for s in _read(stage5 / "suspects.json")
+    ]
+    _write_json(web_data / listed, public)
+    features = [
+        {"type": "Feature", "properties": {"rank": f["properties"]["rank"]},
+         "geometry": round_coordinates(f["geometry"], COORD_DECIMALS)}
+        for f in _read(stage5 / "patches.geojson")["features"]
+        if f["properties"]["category"] == "suspect"
+    ]
+    _write_json(web_data / areas, {"type": "FeatureCollection", "features": features})
+    return {"counts": summary["categories"], "list": listed, "areas": areas}
+
+
 def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
     slug = lga_dir.name
     stage2 = _latest(lga_dir, "stage2_*")
     stage3 = _latest(lga_dir, "stage3_*")
     stage4 = _latest(lga_dir, "stage4_*")
+    stage5 = _latest(lga_dir, "stage5_*")
     if stage2 is None and stage3 is None:
         raise ValueError(f"No finished outputs in {lga_dir}")
 
@@ -138,6 +160,7 @@ def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
         "events": [_event_entry(stage2, slug, web_data)] if stage2 else [],
         "frequency": _frequency_entry(stage3, slug, web_data) if stage3 else None,
         "terrain": _terrain_entry(stage4, slug, web_data) if stage4 else None,
+        "suspects": _suspects_entry(stage5, slug, web_data) if stage5 else None,
     }
 
 

@@ -15,8 +15,11 @@ Built entirely on free satellite data and open geospatial tools.
    into a flood-frequency map.
 3. **Drainage modelling** — MERIT Hydro flow accumulation and HAND (Height Above
    Nearest Drainage), computed on the wider catchment, not per LGA.
-4. **Anomaly detection** — frequent flooding where terrain says water should
-   drain away is flagged and ranked.
+4. **Anomaly detection** — each repeat-flood area is classified with explicit
+   rules (`analysis/suspects.py`): *natural* (major river, very low ground, or
+   mapped wetland), *suspect* (built-up and either ≥ 3 m above drainage in both
+   MERIT and FABDEM, or on a channel within 150 m of a major-road crossing), or
+   *unclear*. Suspects are ranked by years flooded × height anomaly.
 5. **Web map** — static Leaflet site (`web/`) reading precomputed files; no backend.
 
 Processed LGA by LGA: Obio/Akpor → Port Harcourt → Ikwerre → Okrika → …
@@ -44,6 +47,8 @@ design-system/  Design tokens and rules for the site
 ```bash
 python -m analysis.run_stage2 --lga "Obio/Akpor" --pass 2026-09-29:22 --pass 2026-09-29:30
 python -m analysis.run_stage3 --lga "Obio/Akpor" --years 2021-2026
+python -m analysis.run_stage4 --lga "Obio/Akpor"
+python -m analysis.run_stage5 --lga "Obio/Akpor"
 python -m analysis.publish          # copy results into web/data/
 ```
 
@@ -74,7 +79,10 @@ Credentials are stored in `~/.config/earthengine/` and never in this repo.
 - MERIT Hydro — Yamazaki et al. (2019), CC-BY-NC 4.0 / ODbL 1.0.
 - JRC Global Surface Water — Pekel et al. (2016), EC JRC / Google.
 - geoBoundaries — Runfola et al. (2020), CC-BY 4.0.
-- OpenStreetMap — © OpenStreetMap contributors, ODbL.
+- FABDEM — Hawker et al. (2022), CC BY-NC-SA 4.0 (terrain layers inherit this).
+- Google Open Buildings v3 — CC BY 4.0 / ODbL.
+- ESA WorldCover 2021 v200 — CC BY 4.0.
+- OpenStreetMap (roads, place names, basemap) — © OpenStreetMap contributors, ODbL.
 
 MERIT Hydro's licence restricts derived outputs to non-commercial use.
 
