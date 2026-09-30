@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en-NG">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rivers Flood Survey — where Port Harcourt floods</title>
+    <meta
+      name="description"
+      content="Satellite radar maps of where parts of Rivers State, Nigeria flood — and where they flood year after year. A non-commercial research prototype."
+    />
+    <meta name="theme-color" content="#f4f1e8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111a26" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="img/favicon.svg" type="image/svg+xml" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <script src="vendor/leaflet/leaflet.js" defer></script>
+    <script src="js/main.js" type="module"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#sheet-content">Skip to map details</a>
+
+    <div id="map" role="region" aria-label="Flood map. The list of flooded places in the panel describes the same data."></div>
+
+    <aside class="sheet" id="sheet" data-expanded="false" aria-label="Survey sheet">
+      <button class="sheet__toggle" id="sheet-toggle" type="button" aria-expanded="false" aria-controls="sheet-content">
+        Details
+      </button>
+
+      <div class="sheet__scroll" id="sheet-content" tabindex="-1">
+        <header class="cartouche">
+          <p class="kicker">Rivers State Flood Survey</p>
+          <h1 id="lga-title">Loading…</h1>
+          <p class="cartouche__meta" id="lga-meta"></p>
+        </header>
+
+        <section class="section" aria-labelledby="controls-heading">
+          <h2 id="controls-heading" class="visually-hidden">Map controls</h2>
+          <label class="label" for="lga-select">Local government area</label>
+          <select class="select" id="lga-select"></select>
+
+          <fieldset class="layers" id="layer-controls">
+            <legend class="label label--spaced">Flood layer</legend>
+          </fieldset>
+
+          <label class="check">
+            <input type="checkbox" id="boundary-toggle" checked />
+            <span>Show LGA boundary</span>
+          </label>
+        </section>
+
+        <section class="section" aria-labelledby="figure-heading" aria-live="polite">
+          <h2 id="figure-heading">What the radar saw</h2>
+          <div id="figure"></div>
+          <div id="legend"></div>
+        </section>
+
+        <section class="section" aria-labelledby="hotspots-heading">
+          <h2 id="hotspots-heading">Largest flooded areas</h2>
+          <ol class="hotspots" id="hotspots"></ol>
+        </section>
+
+        <section class="section">
+          <details class="notice">
+            <summary>What this map can and can't tell you</summary>
+            <ul>
+              <li>
+                It maps <strong>standing water seen by satellite radar</strong> (Sentinel-1), which sees through cloud.
+                Street flooding that drains within hours can be missed.
+              </li>
+              <li>
+                Radar struggles <strong>between tall buildings and under dense trees</strong>, so dense built-up areas
+                are likely under-counted.
+              </li>
+              <li>
+                Areas are <strong>neighbourhood-level</strong>. The map cannot point to an individual drain or culvert.
+              </li>
+              <li>
+                A flooded area may have <strong>blocked drainage</strong> or may simply be <strong>built on natural
+                floodplain</strong>. The map alone cannot tell these apart.
+              </li>
+              <li>Every result is a <strong>lead to check on the ground</strong>, not a conclusion.</li>
+            </ul>
+          </details>
+        </section>
+
+        <footer class="footer">
+          <p>
+            Non-commercial research prototype.
+            <a href="https://github.com/GeneralBlaze/ph-flood-mapping" rel="noopener">Method and code on GitHub</a>.
+          </p>
+          <p>
+            Contains modified Copernicus Sentinel data (ESA). JRC Global Surface Water (EC JRC/Google). MERIT Hydro
+            (CC-BY-NC 4.0). Boundaries: geoBoundaries (CC-BY 4.0). Place names and basemap © OpenStreetMap
+            contributors.
+          </p>
+          <p id="generated"></p>
+        </footer>
+      </div>
+    </aside>
+  </body>
+</html>

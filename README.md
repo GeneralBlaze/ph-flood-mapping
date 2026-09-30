@@ -17,7 +17,7 @@ Built entirely on free satellite data and open geospatial tools.
    Nearest Drainage), computed on the wider catchment, not per LGA.
 4. **Anomaly detection** — frequent flooding where terrain says water should
    drain away is flagged and ranked.
-5. **Web map** — Leaflet over OpenStreetMap, serving precomputed GeoJSON.
+5. **Web map** — static Leaflet site (`web/`) reading precomputed files; no backend.
 
 Processed LGA by LGA: Obio/Akpor → Port Harcourt → Ikwerre → Okrika → …
 
@@ -32,11 +32,30 @@ Processed LGA by LGA: Obio/Akpor → Port Harcourt → Ikwerre → Okrika → �
 ## Layout
 
 ```
-analysis/   Earth Engine pipeline (Python)
-api/        FastAPI serving precomputed GeoJSON
-web/        Leaflet front end
-data/       Generated outputs (git-ignored)
+analysis/       Earth Engine pipeline (Python)
+web/            Static site deployed to Vercel (Leaflet, no build step)
+web/data/       Published results — written by `python -m analysis.publish`
+data/           Working outputs (git-ignored)
+design-system/  Design tokens and rules for the site
 ```
+
+## Running the pipeline
+
+```bash
+python -m analysis.run_stage2 --lga "Obio/Akpor" --pass 2026-09-29:22 --pass 2026-09-29:30
+python -m analysis.run_stage3 --lga "Obio/Akpor" --years 2021-2026
+python -m analysis.publish          # copy results into web/data/
+```
+
+## Site
+
+```bash
+cd web && python3 -m http.server 8765   # preview at http://localhost:8765
+node --test js/                        # front-end unit tests
+```
+
+Deploy on Vercel with **Root Directory = `web`** (no build command). Security
+headers and caching are in `web/vercel.json`.
 
 ## Setup
 

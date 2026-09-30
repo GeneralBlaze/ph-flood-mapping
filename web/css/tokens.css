@@ -1,0 +1,69 @@
+/* Design tokens — see design-system/ph-flood-mapping/MASTER.md */
+:root {
+  color-scheme: light dark;
+
+  --paper: #f4f1e8;
+  --paper-2: #eae5d6;
+  --ink: #0f1b2d;
+  --ink-muted: #3e4a5c;
+  --rule: #c9c1aa;
+  --accent: #0369a1;
+  --signal: #c2410c;
+  --signal-ink: #ffffff;
+  --event: #1f6fff;
+
+  --ramp-1: #d6e6f4;
+  --ramp-2: #a8cbe8;
+  --ramp-3: #6fa8d6;
+  --ramp-4: #3a82c0;
+  --ramp-5: #1a5a9a;
+  --ramp-6: #0b3470;
+
+  --font-display: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --font-text: "Public Sans", "Segoe UI", system-ui, sans-serif;
+
+  --text-label: 0.8125rem;
+  --text-small: 0.9375rem;
+  --text-body: 1rem;
+  --text-h3: 1.25rem;
+  --text-h2: 1.625rem;
+  --text-title: clamp(1.9rem, 1.5rem + 1.6vw, 2.6rem);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-control: 2px;
+  --radius-panel: 4px;
+  --shadow-sheet: 0 1px 0 var(--rule), 0 12px 32px -12px rgb(15 27 45 / 0.35);
+
+  --z-map: 0;
+  --z-panel: 20;
+  --z-controls: 30;
+  --z-toast: 50;
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+
+  --panel-width: min(420px, 100vw - 32px);
+  --touch: 44px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #111a26;
+    --paper-2: #172233;
+    --ink: #ece8dc;
+    --ink-muted: #a9b4c3;
+    --rule: #2c3a4e;
+    --accent: #63bdf2;
+    --signal: #f2914f;
+    --signal-ink: #111a26;
+    --shadow-sheet: 0 1px 0 var(--rule), 0 12px 32px -12px rgb(0 0 0 / 0.7);
+  }
+}
