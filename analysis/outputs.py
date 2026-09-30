@@ -17,7 +17,7 @@ QUICKLOOK_PX = 1600
 OVERLAY_PX = 2048
 
 
-def _download(url: str, path: Path) -> None:
+def download(url: str, path: Path) -> None:
     try:
         with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_S) as response:
             path.write_bytes(response.read())
@@ -28,7 +28,7 @@ def _download(url: str, path: Path) -> None:
         raise RuntimeError(f"Download to {path} failed: {exc}") from exc
 
 
-def _bounds(region: ee.Geometry) -> tuple[float, float, float, float]:
+def bounds(region: ee.Geometry) -> tuple[float, float, float, float]:
     """(south, west, north, east) of the region's bounding box."""
     ring = region.bounds().coordinates().get(0).getInfo()
     lons, lats = [p[0] for p in ring], [p[1] for p in ring]
@@ -42,7 +42,7 @@ def write_quicklook(event: ee.Image, mask: ee.Image, region: ee.Geometry, path: 
     outline = ee.Image().paint(ee.FeatureCollection([ee.Feature(region)]), 0, 2).visualize(palette=["ffcc00"])
     image = ee.ImageCollection([backdrop, flood, outline]).mosaic()
     url = image.getThumbURL({"region": region.bounds(), "dimensions": QUICKLOOK_PX, "format": "png"})
-    _download(url, path)
+    download(url, path)
 
 
 def write_web_overlay(mask: ee.Image, region: ee.Geometry, directory: Path) -> None:
@@ -51,8 +51,8 @@ def write_web_overlay(mask: ee.Image, region: ee.Geometry, directory: Path) -> N
     url = image.getThumbURL(
         {"region": region.bounds(), "dimensions": OVERLAY_PX, "format": "png", "crs": "EPSG:3857"}
     )
-    _download(url, directory / "flood_overlay.png")
-    south, west, north, east = _bounds(region)
+    download(url, directory / "flood_overlay.png")
+    south, west, north, east = bounds(region)
     (directory / "flood_overlay.bounds.json").write_text(json.dumps([[south, west], [north, east]]))
 
 
@@ -75,7 +75,7 @@ def write_lga_boundary(region: ee.Geometry, path: Path) -> None:
 
 
 def rank_flooded_places(mask: ee.Image, region: ee.Geometry) -> list[dict[str, Any]]:
-    places = fetch_places(_bounds(region))
+    places = fetch_places(bounds(region))
     if not places:
         return []
     zones = ee.FeatureCollection(

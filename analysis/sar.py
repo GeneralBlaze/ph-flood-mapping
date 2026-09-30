@@ -34,12 +34,21 @@ def despeckle(image: ee.Image) -> ee.Image:
     return smoothed.log10().multiply(10).rename(config.POLARISATION)
 
 
-def baseline_composite(region: ee.Geometry, orbit: int) -> ee.Image:
-    start, end = config.DRY_SEASON
-    scenes = s1_collection(region, start, end, orbit)
+def baseline_composite(
+    region: ee.Geometry, orbit: int, window: tuple[str, str] = config.DRY_SEASON
+) -> ee.Image:
+    scenes = s1_collection(region, *window, orbit)
     if scenes.size().getInfo() == 0:
-        raise ValueError(f"No dry-season scenes for orbit {orbit} in {config.DRY_SEASON}")
+        raise ValueError(f"No dry-season scenes for orbit {orbit} in {window}")
     return scenes.map(despeckle).median().clip(region)
+
+
+def scene_dates(region: ee.Geometry, window: tuple[str, str], orbit: int) -> list[str]:
+    """Distinct acquisition dates (UTC) for one orbit; same-day tiles share a date."""
+    dates = s1_collection(region, *window, orbit).aggregate_array("system:time_start").map(
+        lambda t: ee.Date(t).format("YYYY-MM-dd")
+    )
+    return sorted(set(dates.getInfo()))
 
 
 def event_image(region: ee.Geometry, date: str, orbit: int) -> ee.Image:

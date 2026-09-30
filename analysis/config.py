@@ -28,3 +28,10 @@ PLACE_BUFFER_M = 750
 MIN_FLOODED_HA = 0.5
 
 OUTPUT_SCALE_M = 10
+
+# Stage 3 stacking
+ORBITS = [22, 30, 124]                # relative orbits covering Port Harcourt
+STACK_YEARS = "2021-2026"
+MIN_FLOOD_OBS_PER_YEAR = 1            # flood observations needed to count a year as flooded
+REPEAT_MIN_YEARS = 3                  # "repeat offender" = flooded in at least this many years
+EE_WORKERS = 6                        # parallel Earth Engine requests when thresholding scenes
