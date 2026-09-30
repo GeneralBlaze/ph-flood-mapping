@@ -60,3 +60,26 @@ def test_nearest_place_label_none_when_too_far():
     from analysis.clusters import nearest_place_label
 
     assert nearest_place_label(4.86, 6.99, [{"name": "Far", "lat": 4.99, "lon": 7.2}], max_m=2000) is None
+
+
+def test_site_label_prefers_nearest_road_when_no_place():
+    from shapely.geometry import LineString
+
+    from analysis.clusters import site_label
+
+    roads = [{"name": "Trans Woji Road", "line": LineString([(7.0, 4.8), (7.01, 4.8)])},
+             {"name": None, "line": LineString([(7.0, 4.8001), (7.01, 4.8001)])}]
+
+    assert site_label({}, 4.8005, 7.005, places=[], roads=roads) == "Off Trans Woji Road"
+
+
+def test_site_label_falls_back_to_coordinates():
+    from analysis.clusters import site_label
+
+    assert site_label({}, 4.81234, 7.04567, places=[], roads=[]) == "Site at 4.812, 7.046"
+
+
+def test_site_label_uses_address_first():
+    from analysis.clusters import site_label
+
+    assert site_label({"suburb": "Woji"}, 4.8, 7.0, places=[{"name": "X", "lat": 4.8, "lon": 7.0}], roads=[]) == "Woji"

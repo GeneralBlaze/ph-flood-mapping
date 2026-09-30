@@ -1,4 +1,4 @@
-// Shareable view state lives in the URL: ?lga=<slug>&layer=suspects|frequency|event|none&boundary=0&drainage=1&hand=1
+// Shareable view state lives in the URL: ?lga=<slug>&layer=suspects|frequency|event|none&boundary=0&drainage=1&hand=1&site=<rank>
 
 const LAYERS = ["suspects", "frequency", "event", "none"];
 
@@ -19,6 +19,11 @@ export function isLayerAvailable(lga, layer) {
   return availableLayers(lga).includes(layer);
 }
 
+function parseSite(value) {
+  const rank = Number.parseInt(value ?? "", 10);
+  return Number.isInteger(rank) && rank > 0 ? rank : null;
+}
+
 export function readState(search, manifest) {
   const params = new URLSearchParams(search);
   const lga = manifest.lgas.find((l) => l.slug === params.get("lga")) ?? manifest.lgas[0];
@@ -30,6 +35,7 @@ export function readState(search, manifest) {
     boundary: params.get("boundary") !== "0",
     drainage: params.get("drainage") === "1",
     hand: params.get("hand") === "1",
+    site: layer === "suspects" ? parseSite(params.get("site")) : null,
   };
 }
 
@@ -38,5 +44,6 @@ export function writeState(state) {
   if (!state.boundary) params.set("boundary", "0");
   if (state.drainage) params.set("drainage", "1");
   if (state.hand) params.set("hand", "1");
+  if (state.site) params.set("site", String(state.site));
   return `?${params.toString()}`;
 }

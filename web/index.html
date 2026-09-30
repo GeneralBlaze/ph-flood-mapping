@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Rivers Flood Survey — where Port Harcourt floods</title>
+    <title>Rivers State Flood Survey</title>
     <meta
       name="description"
       content="Satellite radar maps of where parts of Rivers State, Nigeria flood — and where they flood year after year. A non-commercial research prototype."
@@ -28,6 +28,29 @@
     <a class="skip-link" href="#sheet-content">Skip to map details</a>
 
     <div id="map" role="region" aria-label="Flood map. The list of flooded places in the panel describes the same data."></div>
+
+    <button class="sheet-collapse" id="sheet-collapse" type="button" aria-controls="sheet" aria-expanded="true" aria-label="Hide panel">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <section class="site-bar" id="site-bar" aria-live="polite" hidden>
+      <div class="site-bar__head">
+        <span class="hotspot__rank" id="site-rank"></span>
+        <h2 class="site-bar__title" id="site-name"></h2>
+      </div>
+      <ul class="site-bar__key" aria-label="Key">
+        <li><span class="key key--site" aria-hidden="true"></span>Flooded area</li>
+        <li><span class="key key--route" aria-hidden="true"></span>Route water should take</li>
+        <li><span class="key key--building" aria-hidden="true"></span>Buildings on that route</li>
+      </ul>
+      <div class="site-bar__actions">
+        <div class="segmented" role="group" aria-label="Base map">
+          <button type="button" id="basemap-satellite" aria-pressed="true">Satellite</button>
+          <button type="button" id="basemap-street" aria-pressed="false">Map</button>
+        </div>
+        <button type="button" class="site-bar__back" id="site-back">Back to overview</button>
+      </div>
+    </section>
 
     <aside class="sheet" id="sheet" data-expanded="false" aria-label="Survey sheet">
       <button class="sheet__toggle" id="sheet-toggle" type="button" aria-expanded="false" aria-controls="sheet-content">
@@ -60,15 +83,15 @@
             <label class="check">
               <input type="checkbox" id="drainage-toggle" />
               <span class="check__text">
-                Expected drainage channels
-                <span class="check__note">Where the land says water should flow</span>
+                Natural drainage paths
+                <span class="check__note">Routes surface water follows downhill</span>
               </span>
             </label>
             <label class="check">
               <input type="checkbox" id="hand-toggle" />
               <span class="check__text">
-                Height above drainage
-                <span class="check__note">How far water must rise to reach a channel</span>
+                Height above nearest drainage
+                <span class="check__note">Elevation relative to the nearest drainage path</span>
               </span>
             </label>
             <div id="terrain-legend"></div>
@@ -76,7 +99,7 @@
         </section>
 
         <section class="section" aria-labelledby="figure-heading" aria-live="polite">
-          <h2 id="figure-heading">What the radar saw</h2>
+          <h2 id="figure-heading">Radar readings</h2>
           <div id="figure"></div>
           <div id="legend"></div>
         </section>
@@ -88,7 +111,7 @@
 
         <section class="section">
           <details class="notice">
-            <summary>What this map can and can't tell you</summary>
+            <summary>Limitations</summary>
             <ul>
               <li>
                 It maps <strong>standing water seen by satellite radar</strong> (Sentinel-1), which sees through cloud.
@@ -118,7 +141,7 @@
           <p>
             Contains modified Copernicus Sentinel data (ESA). JRC Global Surface Water (EC JRC/Google). MERIT Hydro
             (CC-BY-NC 4.0). FABDEM (CC BY-NC-SA 4.0); terrain layers derived from it share that licence. Boundaries: geoBoundaries (CC-BY 4.0). Buildings: Google Open Buildings (CC BY 4.0). Land cover: ESA WorldCover 2021 (CC BY 4.0). Place names and basemap © OpenStreetMap
-            contributors.
+            contributors. Satellite imagery: Esri, Maxar, Earthstar Geographics and the GIS User Community.
           </p>
           <p id="generated"></p>
         </footer>

@@ -96,7 +96,7 @@ def test_mapped_wetland_is_natural_even_when_raised():
 def test_built_up_share_is_explained_for_suspects():
     result = classify_patch(_stats(built_frac=0.8), crossing_dist_m=None)
 
-    assert any("80% built-up" in r for r in result["reasons"])
+    assert any("paving): 80%" in r for r in result["reasons"])
 
 
 def test_crossing_must_be_within_150_m():
@@ -117,3 +117,10 @@ def test_patch_too_small_to_measure_is_unclear():
 
     assert result["category"] == "unclear"
     assert "too small" in result["reasons"][0]
+
+
+def test_airfield_paving_is_not_a_suspect():
+    result = classify_patch(_stats(on_airfield=True), crossing_dist_m=None)
+
+    assert result["category"] == "unclear"
+    assert "runway" in result["reasons"][0]

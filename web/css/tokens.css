@@ -12,6 +12,7 @@
   --signal-ink: #ffffff;
   --event: #1f6fff;
   --channel: #0891b2;
+  --obstruction: #dc2626;
   --hand-gradient: linear-gradient(90deg, #f7f1e1, #e8d8b0, #d4b97f, #b8925a, #8c5a2b, #5c3a1c);
 
   --ramp-1: #d6e6f4;
@@ -67,6 +68,7 @@
     --signal: #f2914f;
     --signal-ink: #111a26;
     --channel: #22d3ee;
+    --obstruction: #f87171;
     --shadow-sheet: 0 1px 0 var(--rule), 0 12px 32px -12px rgb(0 0 0 / 0.7);
   }
 }

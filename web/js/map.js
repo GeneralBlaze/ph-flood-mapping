@@ -1,4 +1,5 @@
 import { el } from "./dom.js";
+import { createFlowLayer } from "./flow-layer.js";
 import { formatHectares } from "./format.js";
 
 const PH_CENTRE = [4.82, 7.0];
@@ -9,6 +10,13 @@ const OVERLAY_OPACITY = 0.85;
 const HAND_OPACITY = 0.6;
 const BASEMAP_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const BASEMAP_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
+const ESRI_REFERENCE = "https://services.arcgisonline.com/ArcGIS/rest/services/Reference";
+const SATELLITE_ATTRIBUTION =
+  "Imagery &copy; Esri, Maxar, Earthstar Geographics and the GIS User Community &middot; Powered by Esri";
+const SITE_ZOOM = 17;
+const SITE_PADDING = 60;
+const ROUTE_UPSTREAM_KM2 = 50; // draws route lines at full width
 
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -25,12 +33,25 @@ function hotspotPopup(hotspot, subtitle) {
       el("ul", { class: "popup__reasons" }, hotspot.reasons.map((r) => el("li", { text: r }))),
       el("p", {
         class: "popup__caveat",
-        text: "A lead, not a verdict: it could also be a pond, a building site or smooth paving that looks like water to radar. Check on the ground.",
+        text: "An indication, not a confirmed blockage. The water may instead be a pond, a construction site or paving that appears as water on radar. Verify on site.",
       })
     );
   }
   children.push(el("p", { text: `${hotspot.lat.toFixed(4)}, ${hotspot.lon.toFixed(4)}` }));
   return el("div", { class: "popup" }, children);
+}
+
+// Padding that keeps fitted areas clear of the floating panels: the side sheet
+// (or bottom sheet on phones) and the site bar when it is showing.
+function clearOfPanels(margin) {
+  const sheet = document.getElementById("sheet").getBoundingClientRect();
+  const siteBar = document.getElementById("site-bar");
+  const barBottom = siteBar && !siteBar.hidden ? siteBar.getBoundingClientRect().bottom : 0;
+  const isBottomSheet = window.matchMedia("(max-width: 768px)").matches;
+  const collapsed = document.body.classList.contains("sheet-collapsed");
+  const left = isBottomSheet || collapsed ? margin : sheet.right + margin;
+  const bottom = isBottomSheet ? window.innerHeight - sheet.top + margin : margin;
+  return { paddingTopLeft: [left, Math.max(margin, barBottom + margin)], paddingBottomRight: [margin, bottom] };
 }
 
 export function createMap(container) {
@@ -40,8 +61,15 @@ export function createMap(container) {
   map.on("zoomend", setOverview);
   setOverview();
 
-  // Dark mode darkens the tiles with a CSS filter (see .basemap-tiles in app.css).
-  L.tileLayer(BASEMAP_URL, { attribution: BASEMAP_ATTRIBUTION, maxZoom: 19, className: "basemap-tiles" }).addTo(map);
+  // Dark mode darkens the street tiles with a CSS filter (see .basemap-tiles in app.css).
+  const streetLayer = L.tileLayer(BASEMAP_URL, { attribution: BASEMAP_ATTRIBUTION, maxZoom: 19, className: "basemap-tiles" }).addTo(map);
+  let satelliteLayer = null; // created on first use so overview visitors never load imagery
+  const satellite = () =>
+    (satelliteLayer ??= L.layerGroup([
+      L.tileLayer(`${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, { attribution: SATELLITE_ATTRIBUTION, maxZoom: 19 }),
+      L.tileLayer(`${ESRI_REFERENCE}/World_Transportation/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19 }),
+      L.tileLayer(`${ESRI_REFERENCE}/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19 }),
+    ]));
 
   // Creation order sets stacking: terrain shading < flood overlay < channels < boundary < hotspots.
   const groups = {
@@ -49,21 +77,17 @@ export function createMap(container) {
     overlay: L.layerGroup().addTo(map),
     drainage: L.layerGroup().addTo(map),
     suspects: L.layerGroup().addTo(map),
+    site: L.layerGroup().addTo(map),
     boundary: L.layerGroup().addTo(map),
     hotspots: L.layerGroup().addTo(map),
   };
   const markers = new Map();
+  let flowLayer = null;
+  let routeLayer = null;
 
   return {
-    // Keep the fitted area clear of the floating sheet (side panel on desktop, bottom sheet on phones).
     fitTo(bounds) {
-      const sheet = document.getElementById("sheet").getBoundingClientRect();
-      const isBottomSheet = window.matchMedia("(max-width: 768px)").matches;
-      const margin = 24;
-      map.fitBounds(bounds, {
-        paddingTopLeft: isBottomSheet ? [margin, margin] : [sheet.right + margin, margin],
-        paddingBottomRight: isBottomSheet ? [margin, window.innerHeight - sheet.top + margin] : [margin, margin],
-      });
+      map.fitBounds(bounds, clearOfPanels(24));
     },
 
     showOverlay(url, bounds, alt, opacity = OVERLAY_OPACITY) {
@@ -74,6 +98,19 @@ export function createMap(container) {
     showHand(url, bounds) {
       groups.hand.clearLayers();
       if (url) L.imageOverlay(url, bounds, { opacity: HAND_OPACITY, alt: "Height above drainage" }).addTo(groups.hand);
+    },
+
+    showFlow(rows) {
+      if (!rows) {
+        flowLayer?.remove();
+        flowLayer = null;
+        return;
+      }
+      if (!flowLayer) {
+        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        flowLayer = createFlowLayer({ colour: cssVar("--channel"), reducedMotion: reduced }).addTo(map);
+      }
+      flowLayer.setData(rows);
     },
 
     showDrainage(geojson) {
@@ -105,7 +142,58 @@ export function createMap(container) {
       }).addTo(groups.boundary);
     },
 
-    showHotspots(hotspots, subtitle) {
+    setBasemap(kind) {
+      const useSatellite = kind === "satellite";
+      if (useSatellite) {
+        streetLayer.remove();
+        satellite().addTo(map);
+      } else {
+        satelliteLayer?.remove();
+        streetLayer.addTo(map);
+      }
+      streetLayer.bringToBack();
+      container.classList.toggle("map--satellite", useSatellite);
+    },
+
+    showSite({ route, buildings, reducedMotion }) {
+      groups.site.clearLayers();
+      routeLayer?.remove();
+      routeLayer = null;
+      if (buildings) {
+        L.geoJSON(buildings, {
+          style: { color: cssVar("--obstruction"), weight: 2, fillColor: cssVar("--obstruction"), fillOpacity: 0.35 },
+          interactive: false,
+        }).addTo(groups.site);
+      }
+      if (route) {
+        const coords = route.geometry.coordinates;
+        L.polyline(coords.map(([lon, lat]) => [lat, lon]), { color: "#ffffff", weight: 7, opacity: 0.85, interactive: false })
+          .addTo(groups.site);
+        const rows = coords.slice(1).map(([lon, lat], i) => [coords[i][0], coords[i][1], lon, lat, ROUTE_UPSTREAM_KM2]);
+        routeLayer = createFlowLayer({
+          colour: cssVar("--channel"), reducedMotion, arrowPx: 7, minArrowPx: 10, lineAlpha: 1, widthScale: 1.4,
+          pane: "routePane", zIndex: 460,
+        }).addTo(map);
+        routeLayer.setData(rows);
+      }
+    },
+
+    clearSite() {
+      groups.site.clearLayers();
+      routeLayer?.remove();
+      routeLayer = null;
+    },
+
+    focusSite(hotspot, route, reducedMotion) {
+      const points = [[hotspot.lat, hotspot.lon], ...(route?.geometry.coordinates ?? []).map(([lon, lat]) => [lat, lon])];
+      const bounds = L.latLngBounds(points);
+      const options = { maxZoom: SITE_ZOOM, ...clearOfPanels(SITE_PADDING) };
+      if (reducedMotion) map.fitBounds(bounds, options);
+      else map.flyToBounds(bounds, { ...options, duration: 0.8 });
+      markers.get(hotspot.rank)?.openPopup();
+    },
+
+    showHotspots(hotspots, subtitle, onSelect) {
       groups.hotspots.clearLayers();
       markers.clear();
       for (const hotspot of hotspots) {
@@ -121,6 +209,7 @@ export function createMap(container) {
         })
           .bindPopup(() => hotspotPopup(hotspot, subtitle), { maxWidth: 320 })
           .addTo(groups.hotspots);
+        if (onSelect) marker.on("click", () => onSelect(hotspot));
         markers.set(hotspot.rank, marker);
       }
     },

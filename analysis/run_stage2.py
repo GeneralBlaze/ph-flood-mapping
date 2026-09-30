@@ -19,6 +19,7 @@ import ee
 
 from analysis import config, outputs
 from analysis.clusters import name_clusters, top_clusters
+from analysis.crossings import cached_roads
 from analysis.places import cached_places
 from analysis.flood_detection import detect_flood, flooded_hectares
 from analysis.sar import baseline_composite, event_image, lga_geometry
@@ -86,7 +87,8 @@ def run(lga: str, passes: list[tuple[str, int]]) -> dict:
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
 
     places = cached_places(outputs.bounds(region), DATA_DIR / slugify(lga) / "osm_places.json")
-    name_flood_clusters(polygons_path, out_dir / "flood_clusters.json", places)
+    roads = cached_roads(DATA_DIR / slugify(lga) / "osm_roads.json")
+    name_flood_clusters(polygons_path, out_dir / "flood_clusters.json", places, roads)
     try:
         places = outputs.rank_flooded_places(mask, region)
         (out_dir / "flooded_places.json").write_text(json.dumps(places, indent=2))
@@ -97,9 +99,11 @@ def run(lga: str, passes: list[tuple[str, int]]) -> dict:
     return summary
 
 
-def name_flood_clusters(polygons_path: Path, out_path: Path, places: list[dict] = ()) -> list[dict]:
+def name_flood_clusters(
+    polygons_path: Path, out_path: Path, places: list[dict] = (), roads: list[dict] = ()
+) -> list[dict]:
     collection = json.loads(polygons_path.read_text())
-    clusters = name_clusters(top_clusters(collection, config.TOP_CLUSTERS), places)
+    clusters = name_clusters(top_clusters(collection, config.TOP_CLUSTERS), places, roads)
     out_path.write_text(json.dumps(clusters, indent=2))
     return clusters
 

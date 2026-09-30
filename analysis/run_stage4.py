@@ -13,6 +13,7 @@ import ee
 
 from analysis import config, outputs
 from analysis.drainage import MERIT_ASSET, channel_mask, hydro_region, terrain_asset_id, terrain_stack
+from analysis.flowpaths import channel_cells, flow_segments, to_geojson
 from analysis.ee_assets import asset_exists, ensure_folder, wait_for_tasks
 from analysis.run_stage2 import DATA_DIR, slugify
 from analysis.sar import lga_geometry
@@ -102,6 +103,9 @@ def run(lga_name: str) -> dict:
     }
     write_hand_overlay(terrain, lga, out_dir)
     summary["network_polygons"] = write_network(lga.buffer(2000), out_dir / "drainage_network.geojson")
+    segments = flow_segments(channel_cells(lga.buffer(2000)))
+    (out_dir / "flow_paths.geojson").write_text(json.dumps(to_geojson(segments)))
+    summary["flow_segments"] = len(segments)
     outputs.write_lga_boundary(lga, out_dir / "lga_boundary.geojson")
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     log.info("Summary: %s", json.dumps(summary))

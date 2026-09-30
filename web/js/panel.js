@@ -37,8 +37,8 @@ export function renderLayerControls(fieldset, lga, layer, onChange) {
     ),
     layerOption(
       "frequency",
-      "Floods year after year",
-      f ? `Rainy seasons ${yearSpan(f.years)}, shaded by number of years flooded` : "Still processing — check back soon",
+      f ? `Recurrent flooding, ${yearSpan(f.years)}` : "Recurrent flooding",
+      f ? "Shaded by number of rainy seasons flooded" : "Still processing — check back soon",
       layer === "frequency",
       !f,
       onChange
@@ -88,13 +88,14 @@ function suspectsLegend(counts) {
     el("p", {
       class: "legend__caption",
       text:
-        `Of all places that flood year after year, ${counts.natural} are natural floodplain or wetland and ` +
-        `${counts.unclear} are unclear (open land, or too small to measure). Only built-up places are flagged.`,
+        `Of ${counts.suspect + counts.natural + counts.unclear} recurrent flood areas, ${counts.natural} are natural ` +
+        `floodplain or wetland and ${counts.unclear} are inconclusive (open land, or too small to assess). ` +
+        "Only built-up areas are ranked.",
     }),
   ]);
 }
 
-const KIND_LABELS = { raised_ground: "Raised ground", road_crossing: "Road crossing" };
+const KIND_LABELS = { raised_ground: "Elevated ground", road_crossing: "Road crossing" };
 
 function eventLegend(date) {
   return el("p", { class: "legend__caption" }, [
@@ -119,7 +120,7 @@ export function renderFigure(figureEl, legendEl, lga, layer) {
 
 export function renderHotspots(list, heading, hotspots, layer, onSelect) {
   const headings = {
-    suspects: "Check these first",
+    suspects: "Priority sites",
     frequency: "Places that flood year after year",
   };
   heading.textContent = headings[layer] ?? "Largest flooded areas";

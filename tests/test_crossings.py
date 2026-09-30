@@ -66,3 +66,18 @@ def test_only_major_roads_are_kept_for_crossings():
     ]})
 
     assert [r["highway"] for r in major_roads(roads)] == ["secondary"]
+
+
+def test_parse_aeroways_keeps_lines_and_areas():
+    from analysis.crossings import parse_aeroways
+
+    payload = {"elements": [
+        {"type": "way", "tags": {"aeroway": "runway"}, "geometry": [{"lat": 4.84, "lon": 7.01}, {"lat": 4.83, "lon": 7.02}]},
+        {"type": "way", "tags": {"aeroway": "apron"},
+         "geometry": [{"lat": 4.8, "lon": 7.0}, {"lat": 4.8, "lon": 7.001}, {"lat": 4.801, "lon": 7.001}, {"lat": 4.8, "lon": 7.0}]},
+        {"type": "node", "tags": {"aeroway": "windsock"}, "lat": 4.8, "lon": 7.0},
+    ]}
+
+    shapes = parse_aeroways(payload)
+
+    assert [s.geom_type for s in shapes] == ["LineString", "Polygon"]

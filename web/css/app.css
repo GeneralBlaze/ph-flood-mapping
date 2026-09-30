@@ -594,3 +594,202 @@ a {
 .map--overview .hotspot-marker {
   transform: scale(0.72);
 }
+
+/* Desktop: collapse the sheet to give the map the full screen */
+.sheet {
+  transition: transform var(--duration-normal) var(--ease);
+}
+
+.sheet-collapse {
+  position: fixed;
+  z-index: var(--z-controls);
+  top: var(--space-6);
+  left: var(--space-4);
+  display: grid;
+  place-items: center;
+  width: var(--touch);
+  height: var(--touch);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-sheet);
+  cursor: pointer;
+  transform: translateX(calc(var(--panel-width) + var(--space-2)));
+  transition: transform var(--duration-normal) var(--ease), background-color var(--duration-fast) var(--ease);
+}
+
+.sheet-collapse:hover {
+  background: var(--paper-2);
+}
+
+.sheet-collapse svg {
+  transition: transform var(--duration-normal) var(--ease);
+}
+
+body.sheet-collapsed .sheet {
+  transform: translateX(calc(-100% - var(--space-5)));
+}
+
+body.sheet-collapsed .sheet-collapse {
+  transform: none;
+}
+
+body.sheet-collapsed .sheet-collapse svg {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 768px) {
+  .sheet-collapse {
+    display: none;
+  }
+
+  body.sheet-collapsed .sheet {
+    transform: none;
+  }
+}
+
+.flow-canvas {
+  pointer-events: none;
+}
+
+/* ---------- Site view ---------- */
+.site-bar {
+  position: fixed;
+  z-index: var(--z-controls);
+  top: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: var(--space-2);
+  width: min(560px, calc(100vw - 32px));
+  padding: var(--space-3) var(--space-4);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-sheet);
+  animation: sheet-in var(--duration-normal) var(--ease) both;
+}
+
+.site-bar[hidden] {
+  display: none;
+}
+
+.site-bar__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.site-bar__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.site-bar__key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-label);
+  color: var(--ink-muted);
+}
+
+.key {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  margin-right: var(--space-1);
+  vertical-align: -1px;
+}
+
+.key--site {
+  background: var(--signal);
+  opacity: 0.8;
+}
+
+.key--route {
+  height: 4px;
+  vertical-align: 2px;
+  background: var(--channel);
+}
+
+.key--building {
+  background: var(--obstruction);
+  opacity: 0.7;
+}
+
+.site-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.segmented button,
+.site-bar__back {
+  min-height: var(--touch);
+  padding: 0 var(--space-4);
+  font: 600 var(--text-small) var(--font-text);
+  color: var(--ink);
+  background: var(--paper);
+  border: 0;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--rule);
+}
+
+.segmented button[aria-pressed="true"] {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.segmented button:hover:not([aria-pressed="true"]),
+.site-bar__back:hover {
+  background: var(--paper-2);
+}
+
+.site-bar__back {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+}
+
+/* Desktop: keep the bar clear of the side panel */
+@media (min-width: 769px) {
+  .site-bar {
+    left: calc(var(--panel-width) + var(--space-6));
+    right: var(--space-7);
+    width: auto;
+    max-width: 560px;
+    transform: none;
+  }
+
+  body.sheet-collapsed .site-bar {
+    left: calc(var(--touch) + var(--space-6));
+  }
+}
+
+/* Phones: keep the site bar clear of the zoom buttons (top right) */
+@media (max-width: 768px) {
+  .site-bar {
+    left: var(--space-4);
+    right: calc(var(--space-4) + var(--touch) + var(--space-2));
+    width: auto;
+    transform: none;
+  }
+}

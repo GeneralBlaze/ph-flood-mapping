@@ -113,3 +113,31 @@ def test_entry_includes_suspects_with_public_fields_only(stage2_dir, tmp_path):
     assert listed[0]["anomaly_m"] == 9.9
     areas = json.loads((web_data / suspects["areas"]).read_text())
     assert [f["properties"] for f in areas["features"]] == [{"rank": 1}]
+
+
+def test_compact_flow_rows():
+    from analysis.publish import compact_flow
+
+    collection = {"features": [{"properties": {"upa_km2": 2.345},
+                                "geometry": {"coordinates": [[7.1234567, 4.8], [7.124, 4.7991666]]}}]}
+
+    assert compact_flow(collection) == [[7.12346, 4.8, 7.124, 4.79917, 2.3]]
+
+
+def test_suspects_entry_publishes_routes_and_obstructions(stage2_dir, tmp_path):
+    stage5 = stage2_dir.parent / "stage5_suspects"
+    _write(stage5 / "summary.json", {"categories": {"suspect": 1, "natural": 0, "unclear": 0}})
+    _write(stage5 / "suspects.json", [])
+    _write(stage5 / "patches.geojson", {"type": "FeatureCollection", "features": []})
+    line = {"type": "LineString", "coordinates": [[7.1234567, 4.8], [7.124, 4.801]]}
+    _write(stage5 / "routes.geojson", {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"rank": 1}, "geometry": line}]})
+    _write(stage5 / "obstructions.geojson", {"type": "FeatureCollection", "features": []})
+    web_data = tmp_path / "web" / "data"
+
+    entry = build_lga_entry(stage2_dir.parent, "Obio/Akpor", web_data)
+
+    routes = json.loads((web_data / entry["suspects"]["routes"]).read_text())
+    assert routes["features"][0]["properties"] == {"rank": 1}
+    assert routes["features"][0]["geometry"]["coordinates"][0] == [7.12346, 4.8]
+    assert (web_data / entry["suspects"]["obstructions"]).exists()

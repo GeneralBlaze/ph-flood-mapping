@@ -11,7 +11,7 @@ import math
 from pathlib import Path
 from typing import Any
 
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
 
@@ -38,6 +38,40 @@ def fetch_roads(bbox: tuple[float, float, float, float], cache: Path) -> list[di
     payload = query_overpass(query)
     cache.write_text(json.dumps(payload))
     return parse_roads(payload)
+
+
+AEROWAY_TYPES = "runway|taxiway|apron|helipad|aerodrome"  # aerodrome = whole airfield outline
+
+
+def fetch_aeroways(bbox: tuple[float, float, float, float], cache: Path) -> list[BaseGeometry]:
+    """Airfield paving (runways, taxiways, aprons) — smooth enough to read as water on radar."""
+    if cache.exists():
+        return parse_aeroways(json.loads(cache.read_text()))
+    south, west, north, east = bbox
+    query = (
+        f"[out:json][timeout:{REQUEST_TIMEOUT_S}];"
+        f'way["aeroway"~"^({AEROWAY_TYPES})$"]({south},{west},{north},{east});'
+        "out tags geom;"
+    )
+    payload = query_overpass(query)
+    cache.write_text(json.dumps(payload))
+    return parse_aeroways(payload)
+
+
+def parse_aeroways(payload: dict[str, Any]) -> list[BaseGeometry]:
+    shapes = []
+    for element in payload.get("elements", []):
+        coords = [(p["lon"], p["lat"]) for p in element.get("geometry", [])]
+        if element.get("type") != "way" or len(coords) < 2:
+            continue
+        closed = len(coords) >= 4 and coords[0] == coords[-1]
+        shapes.append(Polygon(coords) if closed else LineString(coords))
+    return shapes
+
+
+def cached_roads(cache: Path) -> list[dict[str, Any]]:
+    """Roads from a previous fetch, or [] if none has been made for this LGA yet."""
+    return parse_roads(json.loads(cache.read_text())) if cache.exists() else []
 
 
 def parse_roads(payload: dict[str, Any]) -> list[dict[str, Any]]:

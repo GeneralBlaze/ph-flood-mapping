@@ -19,6 +19,7 @@ METRES_PER_DEG_LAT = 110_574.0
 METRES_PER_DEG_LON_EQUATOR = 111_320.0
 UNNAMED = "unnamed area"
 NEAR_PLACE_MAX_M = 2000
+NEAR_ROAD_MAX_M = 500
 NAME_FIELDS = ("neighbourhood", "quarter", "suburb", "village", "hamlet", "town", "city_district")
 
 
@@ -84,6 +85,35 @@ def nearest_place_label(lat: float, lon: float, places: list[dict[str, Any]], ma
     return f"near {closest['name']}"
 
 
+def nearest_road_label(lat: float, lon: float, roads: list[dict[str, Any]], max_m: float) -> str | None:
+    """'Off <road>' for the closest *named* road within max_m, else None."""
+    from shapely.geometry import Point
+
+    lon_scale = METRES_PER_DEG_LON_EQUATOR * math.cos(math.radians(lat))
+    point = Point(lon, lat)
+    named = [r for r in roads if r.get("name")]
+    if not named:
+        return None
+    closest = min(named, key=lambda r: r["line"].distance(point))
+    nearest = closest["line"].interpolate(closest["line"].project(point))
+    metres = math.hypot((nearest.x - lon) * lon_scale, (nearest.y - lat) * METRES_PER_DEG_LAT)
+    return f"Off {closest['name']}" if metres <= max_m else None
+
+
+def site_label(
+    address: dict[str, str], lat: float, lon: float, places: list[dict[str, Any]], roads: list[dict[str, Any]]
+) -> str:
+    """Neighbourhood > near named place > off named road > coordinates."""
+    described = describe_address(address)
+    if described != UNNAMED:
+        return described
+    return (
+        nearest_place_label(lat, lon, places, NEAR_PLACE_MAX_M)
+        or nearest_road_label(lat, lon, roads, NEAR_ROAD_MAX_M)
+        or f"Site at {lat:.3f}, {lon:.3f}"
+    )
+
+
 def reverse_geocode(lat: float, lon: float) -> dict[str, str]:
     query = urllib.parse.urlencode(
         {"format": "jsonv2", "lat": f"{lat:.6f}", "lon": f"{lon:.6f}", "zoom": 17, "addressdetails": 1}
@@ -93,21 +123,17 @@ def reverse_geocode(lat: float, lon: float) -> dict[str, str]:
         return json.load(response).get("address", {})
 
 
-def name_clusters(clusters: list[dict[str, Any]], places: list[dict[str, Any]] = ()) -> list[dict[str, Any]]:
-    """Return new cluster dicts with a place description; failures are marked, not raised.
-
-    When the geocoder finds no neighbourhood or road, the nearest named OSM place
-    (within NEAR_PLACE_MAX_M) is used instead, e.g. "near Rumuokwuta".
-    """
+def name_clusters(
+    clusters: list[dict[str, Any]], places: list[dict[str, Any]] = (), roads: list[dict[str, Any]] = ()
+) -> list[dict[str, Any]]:
+    """Return new cluster dicts with a place description (see site_label); failures are marked, not raised."""
     named = []
     for i, cluster in enumerate(clusters):
         if i:
             time.sleep(REQUEST_INTERVAL_S)
         try:
             address = reverse_geocode(cluster["lat"], cluster["lon"])
-            place = describe_address(address)
-            if place == UNNAMED:
-                place = nearest_place_label(cluster["lat"], cluster["lon"], list(places), NEAR_PLACE_MAX_M) or UNNAMED
+            place = site_label(address, cluster["lat"], cluster["lon"], list(places), list(roads))
             named.append({**cluster, "place": place, "address": address})
         except (OSError, json.JSONDecodeError) as exc:
             named.append({**cluster, "place": "lookup failed", "error": str(exc)})

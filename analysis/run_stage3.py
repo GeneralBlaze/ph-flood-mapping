@@ -13,6 +13,7 @@ import ee
 
 from analysis import config, outputs
 from analysis.clusters import name_clusters, top_clusters
+from analysis.crossings import cached_roads
 from analysis.places import cached_places
 from analysis.run_stage2 import DATA_DIR, slugify
 from analysis.sar import lga_geometry
@@ -93,7 +94,8 @@ def run(lga: str, years: list[int]) -> dict:
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
 
     places = cached_places(outputs.bounds(region), DATA_DIR / slug / "osm_places.json")
-    clusters = name_clusters(top_clusters(json.loads(polygons_path.read_text()), config.TOP_CLUSTERS), places)
+    roads = cached_roads(DATA_DIR / slug / "osm_roads.json")
+    clusters = name_clusters(top_clusters(json.loads(polygons_path.read_text()), config.TOP_CLUSTERS), places, roads)
     (out_dir / "repeat_clusters.json").write_text(json.dumps(clusters, indent=2))
     log.info("Summary: %s", json.dumps(summary))
     return summary

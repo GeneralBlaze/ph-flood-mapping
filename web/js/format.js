@@ -28,7 +28,7 @@ export function keyFigure(lga, layer) {
     const n = lga.suspects.counts.suspect;
     return {
       value: `${n} ${n === 1 ? "site" : "sites"}`,
-      caption: "built-up places that keep flooding where the land says water should drain away",
+      caption: "built-up locations with recurrent flooding on ground that should drain naturally",
     };
   }
   if (layer === "frequency" && lga.frequency) {

@@ -32,7 +32,7 @@ def _reasons(stats: dict[str, Any], anomaly_m: float, crossing_dist_m: float | N
     if stats["hollow_m"] <= HOLLOW_M:
         reasons.append("Lies in a local hollow, which can trap water even with working drains")
     if stats.get("built_frac", 0) > 0:
-        reasons.append(f"Land here is {round(stats['built_frac'] * 100)}% built-up")
+        reasons.append(f"Built-up land (buildings, roads, paving): {round(stats['built_frac'] * 100)}%")
     if stats.get("buildings", 0) > 0:
         reasons.append(f"About {stats['buildings']} buildings inside the flooded area")
     return reasons
@@ -53,6 +53,11 @@ def classify_patch(stats: dict[str, Any], crossing_dist_m: float | None) -> dict
             why = "Low ground right beside a channel"
         return {**stats, "category": "natural", "kind": "floodplain", "anomaly_m": anomaly_m, "score": 0,
                 "reasons": [f"{why}: flooding here is expected, not a sign of blocked drains"]}
+
+    if stats.get("on_airfield"):
+        return {**stats, "category": "unclear", "kind": None, "anomaly_m": anomaly_m, "score": 0,
+                "reasons": ["On or beside an airfield runway, taxiway or apron: smooth paving appears as water "
+                            "on radar, so this is most likely not flooding"]}
 
     if stats["mean_years"] < MIN_MEAN_YEARS:
         return {**stats, "category": "unclear", "kind": None, "anomaly_m": anomaly_m, "score": 0,
