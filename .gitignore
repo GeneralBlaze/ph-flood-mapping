@@ -1,0 +1,23 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Credentials — never commit
+.env
+*.json.key
+credentials
+service-account*.json
+.config/
+
+# Large or intermediate data (regenerate from the pipeline)
+data/*
+!data/.gitkeep
+*.tif
+*.tiff
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
