@@ -120,12 +120,21 @@ def _wait_for(tasks: list) -> None:
             time.sleep(TASK_POLL_INTERVAL_S)
 
 
+def remove_specks(mask: ee.Image, min_pixels: int) -> ee.Image:
+    """Keep only connected patches of at least min_pixels; returns a 0/1 image."""
+    patch = mask.selfMask().connectedPixelCount(min_pixels + 1, True)
+    return mask.updateMask(patch.gte(min_pixels)).unmask(0)
+
+
+def _year_flag(yearly: ee.Image) -> ee.Image:
+    flooded = yearly.select("flood_obs").gte(config.MIN_FLOOD_OBS_PER_YEAR)
+    return remove_specks(flooded, config.YEAR_MIN_PATCH_PIXELS)
+
+
 def frequency_image(lga_slug: str, years: list[int]) -> ee.Image:
     """Bands: years_flooded, years_observed, flood_obs, obs, frequency_pct."""
     yearly = [ee.Image(asset_id(lga_slug, y)) for y in years]
-    flooded_years = ee.ImageCollection(
-        [img.select("flood_obs").gte(config.MIN_FLOOD_OBS_PER_YEAR) for img in yearly]
-    ).sum()
+    flooded_years = ee.ImageCollection([_year_flag(img) for img in yearly]).sum()
     observed_years = ee.ImageCollection([img.select("obs").gt(0) for img in yearly]).sum()
     counts = ee.ImageCollection(yearly).sum()
     frequency = counts.select("flood_obs").divide(counts.select("obs").max(1)).multiply(100)

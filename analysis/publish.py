@@ -97,6 +97,7 @@ def _frequency_entry(stage3: Path, slug: str, web_data: Path) -> dict[str, Any]:
     return {
         "years": summary["years"],
         "repeat_min_years": summary["repeat_min_years"],
+        "min_flood_dates_per_year": summary.get("min_flood_dates_per_year", 1),
         "hectares_by_years_flooded": summary["hectares_by_years_flooded"],
         "overlay": overlay,
         "bounds": _read(stage3 / "frequency_overlay.bounds.json"),

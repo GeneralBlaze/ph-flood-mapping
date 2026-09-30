@@ -44,8 +44,9 @@ export function renderLayerControls(fieldset, lga, layer, onChange) {
   );
 }
 
-function frequencyLegend(years) {
-  const steps = years.length;
+function frequencyLegend(frequency) {
+  const steps = frequency.years.length;
+  const dates = frequency.min_flood_dates_per_year ?? 1;
   const ramp = RAMP.slice(0, steps);
   return el("div", { class: "legend", style: { "--steps": steps } }, [
     el(
@@ -60,7 +61,9 @@ function frequencyLegend(years) {
     ),
     el("p", {
       class: "legend__caption",
-      text: `Number of rainy seasons (of ${steps}) in which the radar saw standing water. Darker means more often.`,
+      text:
+        `Number of rainy seasons (of ${steps}) in which the radar saw standing water on at least ${dates} ` +
+        "separate dates. Darker means more often. Brief flash floods seen only once are not counted here.",
     }),
   ]);
 }
@@ -80,7 +83,7 @@ export function renderFigure(figureEl, legendEl, lga, layer) {
       el("span", { class: "figure__caption", text: figure.caption }),
     ])
   );
-  if (layer === "frequency" && lga.frequency) legendEl.replaceChildren(frequencyLegend(lga.frequency.years));
+  if (layer === "frequency" && lga.frequency) legendEl.replaceChildren(frequencyLegend(lga.frequency));
   else if (layer === "event" && lga.events[0]) legendEl.replaceChildren(eventLegend(lga.events[0].date));
   else legendEl.replaceChildren();
 }

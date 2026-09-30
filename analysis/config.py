@@ -32,6 +32,8 @@ OUTPUT_SCALE_M = 10
 # Stage 3 stacking
 ORBITS = [22, 30, 124]                # relative orbits covering Port Harcourt
 STACK_YEARS = "2021-2026"
-MIN_FLOOD_OBS_PER_YEAR = 1            # flood observations needed to count a year as flooded
+MIN_FLOOD_OBS_PER_YEAR = 3            # flooded on >= this many dates to count a year (1 was mostly noise)
+YEAR_MIN_PATCH_PIXELS = 10            # drop isolated specks from each year's flood flag
+REPEAT_MIN_PATCH_PIXELS = 50          # repeat-flood areas smaller than ~0.5 ha are not vectorised
 REPEAT_MIN_YEARS = 3                  # "repeat offender" = flooded in at least this many years
 EE_WORKERS = 6                        # parallel Earth Engine requests when thresholding scenes

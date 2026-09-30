@@ -16,7 +16,7 @@ from analysis.clusters import name_clusters, top_clusters
 from analysis.run_stage2 import DATA_DIR, slugify
 from analysis.sar import lga_geometry
 from analysis.seasons import parse_years
-from analysis.stacking import export_years, frequency_image
+from analysis.stacking import export_years, frequency_image, remove_specks
 
 log = logging.getLogger(__name__)
 YEARS_PALETTE = ["c6dbef", "9ecae1", "6baed6", "3182bd", "08519c", "08306b"]
@@ -71,14 +71,18 @@ def run(lga: str, years: list[int]) -> dict:
     export_years(region, slug, years, config.ORBITS)
     freq = frequency_image(slug, years).clip(region)
 
-    repeat = freq.select("years_flooded").gte(config.REPEAT_MIN_YEARS).rename("flood")
+    repeat = remove_specks(
+        freq.select("years_flooded").gte(config.REPEAT_MIN_YEARS), config.REPEAT_MIN_PATCH_PIXELS
+    ).rename("flood")
     summary = {
         "lga": lga,
         "years": years,
         "orbits": config.ORBITS,
         "repeat_min_years": config.REPEAT_MIN_YEARS,
+        "min_flood_dates_per_year": config.MIN_FLOOD_OBS_PER_YEAR,
         "hectares_by_years_flooded": hectares_by_years(freq, region, len(years)),
     }
+    (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     write_frequency_overlay(freq, region, out_dir, len(years))
     write_geotiff(freq, region, out_dir / "flood_frequency.tif")
     outputs.write_lga_boundary(region, out_dir / "lga_boundary.geojson")
