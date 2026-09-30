@@ -4,6 +4,7 @@ import { formatHectares } from "./format.js";
 const PH_CENTRE = [4.82, 7.0];
 const START_ZOOM = 11;
 const HOTSPOT_ZOOM = 15;
+const OVERVIEW_MAX_ZOOM = 12; // at or below this, markers shrink so clusters stay readable
 const OVERLAY_OPACITY = 0.85;
 const HAND_OPACITY = 0.6;
 const BASEMAP_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -35,6 +36,9 @@ function hotspotPopup(hotspot, subtitle) {
 export function createMap(container) {
   const map = L.map(container, { zoomControl: false, attributionControl: true }).setView(PH_CENTRE, START_ZOOM);
   L.control.zoom({ position: "topright" }).addTo(map);
+  const setOverview = () => container.classList.toggle("map--overview", map.getZoom() <= OVERVIEW_MAX_ZOOM);
+  map.on("zoomend", setOverview);
+  setOverview();
 
   // Dark mode darkens the tiles with a CSS filter (see .basemap-tiles in app.css).
   L.tileLayer(BASEMAP_URL, { attribution: BASEMAP_ATTRIBUTION, maxZoom: 19, className: "basemap-tiles" }).addTo(map);

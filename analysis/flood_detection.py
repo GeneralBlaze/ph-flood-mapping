@@ -24,9 +24,15 @@ class FloodResult:
     change_threshold_db: float
 
 
-def permanent_water(region: ee.Geometry) -> ee.Image:
+def excluded_water(region: ee.Geometry) -> ee.Image:
+    """Water that is not flooding: permanent, tidal or intermittent (JRC), or mangrove.
+
+    In estuarine LGAs such as Port Harcourt, tide height differs between dates,
+    so creek edges and mangrove fringes would otherwise read as new flooding.
+    """
     occurrence = ee.Image(config.JRC_ASSET).select("occurrence").unmask(0)
-    return occurrence.gte(config.PERMANENT_WATER_OCCURRENCE_PCT).clip(region)
+    mangrove = ee.ImageCollection(config.WORLDCOVER_ASSET).first().eq(config.MANGROVE_CLASS)
+    return occurrence.gte(config.TIDAL_OCCURRENCE_PCT).Or(mangrove).clip(region)
 
 
 def _histogram_threshold(image: ee.Image, region: ee.Geometry) -> float:
@@ -45,7 +51,7 @@ def _histogram_threshold(image: ee.Image, region: ee.Geometry) -> float:
 
 def detect_flood(baseline: ee.Image, event: ee.Image, region: ee.Geometry) -> FloodResult:
     difference = event.subtract(baseline).rename("diff")
-    not_permanent = permanent_water(region).Not()
+    not_permanent = excluded_water(region).Not()
 
     water_t = _histogram_threshold(event, region)
     dark = event.lt(water_t).And(not_permanent)

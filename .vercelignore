@@ -1,0 +1,6 @@
+.venv
+data
+analysis
+tests
+design-system
+*.pyc

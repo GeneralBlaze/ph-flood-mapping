@@ -589,3 +589,8 @@ a {
   background: var(--paper-2);
   border-left: 3px solid var(--signal);
 }
+
+/* Smaller markers when zoomed out, so dense clusters stay readable */
+.map--overview .hotspot-marker {
+  transform: scale(0.72);
+}

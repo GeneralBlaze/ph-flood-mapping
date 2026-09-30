@@ -59,8 +59,9 @@ cd web && python3 -m http.server 8765   # preview at http://localhost:8765
 node --test js/                        # front-end unit tests
 ```
 
-Deploy on Vercel with **Root Directory = `web`** (no build command). Security
-headers and caching are in `web/vercel.json`.
+Deployed on Vercel: every push to `main` deploys automatically (the project is
+connected to this repo). `vercel.json` at the repo root serves `web/` with no
+build step and sets the security headers and caching.
 
 ## Setup
 

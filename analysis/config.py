@@ -18,6 +18,9 @@ SPECKLE_RADIUS_M = 50
 
 # Flood classification
 PERMANENT_WATER_OCCURRENCE_PCT = 50   # JRC occurrence at/above this = permanent water
+TIDAL_OCCURRENCE_PCT = 10             # water this often (JRC) = tidal/intermittent; excluded as not flooding
+WORLDCOVER_ASSET = "ESA/WorldCover/v200"
+MANGROVE_CLASS = 95                   # ESA WorldCover mangroves: tidal, excluded
 MAX_DIFF_THRESHOLD_DB = -1.5          # a flood pixel must darken by at least this much
 MIN_PATCH_PIXELS = 10                 # drop specks smaller than ~0.1 ha at 10 m
 HISTOGRAM_SCALE_M = 20

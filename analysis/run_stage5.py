@@ -17,6 +17,7 @@ from shapely.geometry import shape
 
 from analysis import config, outputs
 from analysis.clusters import name_clusters, polygon_area_ha, polygon_centroid
+from analysis.places import cached_places
 from analysis.crossings import crossing_points, fetch_roads, major_roads, nearest_distance_m
 from analysis.drainage import terrain_asset_id
 from analysis.run_stage2 import DATA_DIR, slugify
@@ -124,7 +125,8 @@ def run(lga_name: str, years: list[int]) -> dict:
     rank_by_id = {r["id"]: r["rank"] for r in ranked}
     classified = [{**c, "rank": rank_by_id.get(c["id"])} for c in classified]
 
-    named = name_clusters([{k: r[k] for k in ("rank", "area_ha", "lat", "lon")} for r in ranked[: config.TOP_CLUSTERS]])
+    places = cached_places(outputs.bounds(region), lga_dir / "osm_places.json")
+    named = name_clusters([{k: r[k] for k in ("rank", "area_ha", "lat", "lon")} for r in ranked], places)
     places = {n["rank"]: n["place"] for n in named}
     suspects = [
         {**{k: r[k] for k in ("rank", "kind", "score", "mean_years", "anomaly_m", "area_ha", "buildings", "built_frac",

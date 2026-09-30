@@ -17,6 +17,8 @@ REQUEST_INTERVAL_S = 1.1
 REQUEST_TIMEOUT_S = 30
 METRES_PER_DEG_LAT = 110_574.0
 METRES_PER_DEG_LON_EQUATOR = 111_320.0
+UNNAMED = "unnamed area"
+NEAR_PLACE_MAX_M = 2000
 NAME_FIELDS = ("neighbourhood", "quarter", "suburb", "village", "hamlet", "town", "city_district")
 
 
@@ -66,7 +68,20 @@ def describe_address(address: dict[str, str]) -> str:
     road = address.get("road")
     if name and road:
         return f"{name} ({road})"
-    return name or road or "unnamed area"
+    return name or road or UNNAMED
+
+
+def nearest_place_label(lat: float, lon: float, places: list[dict[str, Any]], max_m: float) -> str | None:
+    """'near <name>' for the closest named place within max_m, else None."""
+    lon_scale = METRES_PER_DEG_LON_EQUATOR * math.cos(math.radians(lat))
+
+    def distance(p: dict[str, Any]) -> float:
+        return math.hypot((p["lon"] - lon) * lon_scale, (p["lat"] - lat) * METRES_PER_DEG_LAT)
+
+    closest = min(places, key=distance, default=None)
+    if closest is None or distance(closest) > max_m:
+        return None
+    return f"near {closest['name']}"
 
 
 def reverse_geocode(lat: float, lon: float) -> dict[str, str]:
@@ -78,15 +93,22 @@ def reverse_geocode(lat: float, lon: float) -> dict[str, str]:
         return json.load(response).get("address", {})
 
 
-def name_clusters(clusters: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return new cluster dicts with a place description; failures are marked, not raised."""
+def name_clusters(clusters: list[dict[str, Any]], places: list[dict[str, Any]] = ()) -> list[dict[str, Any]]:
+    """Return new cluster dicts with a place description; failures are marked, not raised.
+
+    When the geocoder finds no neighbourhood or road, the nearest named OSM place
+    (within NEAR_PLACE_MAX_M) is used instead, e.g. "near Rumuokwuta".
+    """
     named = []
     for i, cluster in enumerate(clusters):
         if i:
             time.sleep(REQUEST_INTERVAL_S)
         try:
             address = reverse_geocode(cluster["lat"], cluster["lon"])
-            named.append({**cluster, "place": describe_address(address), "address": address})
+            place = describe_address(address)
+            if place == UNNAMED:
+                place = nearest_place_label(cluster["lat"], cluster["lon"], list(places), NEAR_PLACE_MAX_M) or UNNAMED
+            named.append({**cluster, "place": place, "address": address})
         except (OSError, json.JSONDecodeError) as exc:
             named.append({**cluster, "place": "lookup failed", "error": str(exc)})
     return named

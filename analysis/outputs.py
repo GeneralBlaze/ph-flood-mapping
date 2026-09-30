@@ -1,6 +1,7 @@
 """Write Stage 2 results to disk: quick-look image, web overlay, polygons, place ranking."""
 
 import json
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -13,19 +14,27 @@ from analysis.places import fetch_places, rank_places
 
 FLOOD_COLOUR = "1f6fff"
 DOWNLOAD_TIMEOUT_S = 180
+DOWNLOAD_ATTEMPTS = 3
+RETRY_BACKOFF_S = 10
 QUICKLOOK_PX = 1600
 OVERLAY_PX = 2048
 
 
-def download(url: str, path: Path) -> None:
-    try:
-        with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_S) as response:
-            path.write_bytes(response.read())
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode(errors="replace")[:500]
-        raise RuntimeError(f"Download to {path} failed: {exc} — {detail}") from exc
-    except OSError as exc:
-        raise RuntimeError(f"Download to {path} failed: {exc}") from exc
+def download(url: str, path: Path, attempts: int = DOWNLOAD_ATTEMPTS) -> None:
+    """Fetch an Earth Engine thumbnail/download URL, retrying timeouts and 5xx (EE is often busy)."""
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_S) as response:
+                path.write_bytes(response.read())
+            return
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace")[:500]
+            if exc.code < 500 or attempt == attempts:
+                raise RuntimeError(f"Download to {path} failed: {exc} — {detail}") from exc
+        except OSError as exc:
+            if attempt == attempts:
+                raise RuntimeError(f"Download to {path} failed: {exc}") from exc
+        time.sleep(RETRY_BACKOFF_S * attempt)
 
 
 def bounds(region: ee.Geometry) -> tuple[float, float, float, float]:

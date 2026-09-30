@@ -1,6 +1,8 @@
 """Named places from OpenStreetMap, used to describe where flooding was found."""
 
 import json
+import logging
+from pathlib import Path
 import urllib.parse
 import urllib.request
 from typing import Any
@@ -12,6 +14,7 @@ OVERPASS_URLS = [
 ]
 PLACE_TYPES = "suburb|neighbourhood|quarter|village|town|hamlet"
 REQUEST_TIMEOUT_S = 90
+log = logging.getLogger(__name__)
 
 
 def _post_overpass(url: str, query: str) -> dict[str, Any]:
@@ -67,3 +70,16 @@ def rank_places(rows: list[dict[str, Any]], min_flooded_ha: float) -> list[dict[
         if row["area_ha"] > 0 and row["flooded_ha"] >= min_flooded_ha
     ]
     return sorted(enriched, key=lambda r: r["flooded_pct"], reverse=True)
+
+
+def cached_places(bbox: tuple[float, float, float, float], cache: Path) -> list[dict[str, Any]]:
+    """Named places, cached to disk; returns [] (with a warning) if Overpass is down."""
+    if cache.exists():
+        return json.loads(cache.read_text())
+    try:
+        places = fetch_places(bbox)
+    except RuntimeError as exc:
+        log.warning("Place names unavailable, labels may read 'unnamed area': %s", exc)
+        return []
+    cache.write_text(json.dumps(places))
+    return places

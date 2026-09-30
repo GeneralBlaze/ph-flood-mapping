@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import ee
 
 from analysis import config
+from analysis.flood_detection import excluded_water
 from analysis.ee_assets import asset_exists, ensure_folder, wait_for_tasks
 from analysis.flood_detection import detect_flood
 from analysis.sar import baseline_composite, event_image, scene_dates
@@ -107,6 +108,9 @@ def frequency_image(lga_slug: str, years: list[int]) -> ee.Image:
     observed_years = ee.ImageCollection([img.select("obs").gt(0) for img in yearly]).sum()
     counts = ee.ImageCollection(yearly).sum()
     frequency = counts.select("flood_obs").divide(counts.select("obs").max(1)).multiply(100)
+    # Tidal/intermittent water is removed after the fact, so cached yearly assets stay valid.
+    keep = excluded_water(ee.Image(asset_id(lga_slug, years[0])).geometry()).Not()
+    flooded_years = flooded_years.updateMask(keep).unmask(0)
     return ee.Image.cat(
         flooded_years.rename("years_flooded").toUint8(),
         observed_years.rename("years_observed").toUint8(),

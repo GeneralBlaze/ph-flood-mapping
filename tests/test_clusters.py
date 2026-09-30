@@ -43,3 +43,20 @@ def test_describe_address_prefers_neighbourhood_then_suburb():
 def test_describe_address_falls_back_to_road_or_unknown():
     assert describe_address({"road": "East-West Road"}) == "East-West Road"
     assert describe_address({}) == "unnamed area"
+
+
+def test_nearest_place_labels_unnamed_area():
+    from analysis.clusters import nearest_place_label
+
+    places = [
+        {"name": "Far Village", "lat": 4.95, "lon": 7.10},
+        {"name": "Rumuokwuta", "lat": 4.8605, "lon": 6.9905},
+    ]
+
+    assert nearest_place_label(4.8600, 6.9900, places, max_m=2000) == "near Rumuokwuta"
+
+
+def test_nearest_place_label_none_when_too_far():
+    from analysis.clusters import nearest_place_label
+
+    assert nearest_place_label(4.86, 6.99, [{"name": "Far", "lat": 4.99, "lon": 7.2}], max_m=2000) is None
