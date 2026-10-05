@@ -140,7 +140,32 @@ def _terrain_entry(stage4: Path, slug: str, web_data: Path) -> dict[str, Any]:
     }
 
 
-def _suspects_entry(stage5: Path, slug: str, web_data: Path) -> dict[str, Any]:
+def merge_site_status(suspects: list[dict[str, Any]], statuses: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Copy of suspects with water_now: 'standing' | 'drained' | 'dry' | None (not measured)."""
+    by_rank = {s["rank"]: s["status"] for s in statuses}
+    return [{**s, "water_now": by_rank.get(s["rank"])} for s in suspects]
+
+
+def _standing_entry(standing: Path, slug: str, web_data: Path) -> dict[str, Any]:
+    summary = _read(standing / "summary.json")
+    after = summary["after"]["date"]
+    overlay = f"{slug}/standing_{after}.png"
+    hotspots = f"{slug}/standing_{after}_hotspots.json"
+    (web_data / slug).mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(standing / "standing_overlay.png", web_data / overlay)
+    _publish_hotspots(standing / "standing_clusters.json", web_data / hotspots)
+    return {
+        "before": summary["before"]["date"],
+        "after": after,
+        "orbit": summary["after"]["orbit"],
+        "hectares": summary["hectares"],
+        "overlay": overlay,
+        "bounds": _read(standing / "standing_overlay.bounds.json"),
+        "hotspots": hotspots,
+    }
+
+
+def _suspects_entry(stage5: Path, slug: str, web_data: Path, standing: Path | None) -> dict[str, Any]:
     summary = _read(stage5 / "summary.json")
     listed = f"{slug}/suspects.json"
     areas = f"{slug}/suspect_areas.geojson"
@@ -148,6 +173,9 @@ def _suspects_entry(stage5: Path, slug: str, web_data: Path) -> dict[str, Any]:
         {**{k: s.get(k) for k in SUSPECT_FIELDS}, "anomaly_m": round(s["anomaly_m"], 1), "mean_years": round(s["mean_years"], 1)}
         for s in _read(stage5 / "suspects.json")
     ]
+    status_file = standing / "site_status.json" if standing else None
+    if status_file and status_file.exists():
+        public = merge_site_status(public, _read(status_file))
     _write_json(web_data / listed, public)
     features = [
         {"type": "Feature", "properties": {"rank": f["properties"]["rank"]},
@@ -180,10 +208,11 @@ def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
     stage3 = _latest(lga_dir, "stage3_*")
     stage4 = _latest(lga_dir, "stage4_*")
     stage5 = _latest(lga_dir, "stage5_*")
-    if stage2 is None and stage3 is None:
+    standing = _latest(lga_dir, "standing_*")
+    if stage2 is None and stage3 is None and standing is None:
         raise ValueError(f"No finished outputs in {lga_dir}")
 
-    boundary_source = (stage3 or stage2) / "lga_boundary.geojson"
+    boundary_source = (stage3 or stage2 or standing) / "lga_boundary.geojson"
     _publish_geojson(boundary_source, web_data / slug / "boundary.geojson")
     return {
         "slug": slug,
@@ -192,7 +221,8 @@ def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
         "events": [_event_entry(stage2, slug, web_data)] if stage2 else [],
         "frequency": _frequency_entry(stage3, slug, web_data) if stage3 else None,
         "terrain": _terrain_entry(stage4, slug, web_data) if stage4 else None,
-        "suspects": _suspects_entry(stage5, slug, web_data) if stage5 else None,
+        "suspects": _suspects_entry(stage5, slug, web_data, standing) if stage5 else None,
+        "standing": _standing_entry(standing, slug, web_data) if standing else None,
     }
 
 
@@ -209,7 +239,11 @@ def main() -> None:
         lga_dir = DATA_DIR / slugify(name)
         if not lga_dir.exists():
             continue
-        entries.append(build_lga_entry(lga_dir, name, WEB_DATA_DIR))
+        try:
+            entries.append(build_lga_entry(lga_dir, name, WEB_DATA_DIR))
+        except ValueError as exc:
+            log.warning("Skipped %s: %s", name, exc)
+            continue
         log.info("Published %s", name)
     log.info("Manifest: %s", write_manifest(entries, WEB_DATA_DIR))
 

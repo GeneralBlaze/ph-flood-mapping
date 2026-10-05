@@ -49,3 +49,6 @@ CHANNEL_UPA_KM2 = 1.0                 # upstream area that makes a cell an expec
 MAX_CHANNEL_DISTANCE_PX = 256         # ~7.7 km at 30 m; beyond this distance is capped
 HOLLOW_RADIUS_M = 250                 # neighbourhood for local-hollow detection
 CHANNEL_SEARCH_M = 1000              # search radius for the nearest channel in FABDEM-based HAND
+
+# Standing water after a dry spell
+STANDING_SITE_MIN_FRAC = 0.1          # share of a site still wet to call it "still under water"

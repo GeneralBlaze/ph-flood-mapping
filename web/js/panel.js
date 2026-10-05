@@ -36,6 +36,16 @@ export function renderLayerControls(fieldset, lga, layer, onChange) {
       onChange
     ),
     layerOption(
+      "standing",
+      lga.standing ? `Water still standing, ${formatDate(lga.standing.after)}` : "Water still standing",
+      lga.standing
+        ? `Flooding from ${formatDate(lga.standing.before)} that had not drained after the dry days since`
+        : "Not yet analysed for this area",
+      layer === "standing",
+      !lga.standing,
+      onChange
+    ),
+    layerOption(
       "frequency",
       f ? `Recurrent flooding, ${yearSpan(f.years)}` : "Recurrent flooding",
       f ? "Shaded by number of rainy seasons flooded" : "Still processing — check back soon",
@@ -97,6 +107,33 @@ function suspectsLegend(counts) {
 
 const KIND_LABELS = { raised_ground: "Elevated ground", road_crossing: "Road crossing" };
 
+function swatchRow(modifier, text) {
+  return el("p", { class: "legend__caption" }, [
+    el("span", { class: `legend__swatch legend__swatch--${modifier}`, "aria-hidden": "true" }),
+    text,
+  ]);
+}
+
+function standingLegend(standing) {
+  const after = formatDate(standing.after);
+  const ha = standing.hectares;
+  return el("div", { class: "legend legend__rows" }, [
+    swatchRow("standing", `Still under water on ${after} (${formatHectares(ha.standing)})`),
+    swatchRow("drained", `Flooded on ${formatDate(standing.before)}, drained since (${formatHectares(ha.drained)})`),
+    swatchRow("new", `Wet on ${after} only (${formatHectares(ha.new)})`),
+    ...(ha.not_imaged > 0
+      ? [swatchRow("unseen", `Outside the radar's view on one of the dates (${formatHectares(ha.not_imaged)}): no information, not dry`)]
+      : []),
+    el("p", {
+      class: "legend__caption",
+      text:
+        "Ground that drains normally clears within a day or two of rain. Water still present after dry days " +
+        "points to blocked or missing drainage. In swamps and floodplains it is normal for the season. " +
+        "Radar sees open ground best; water in narrow streets between buildings is often missed.",
+    }),
+  ]);
+}
+
 function eventLegend(date) {
   return el("p", { class: "legend__caption" }, [
     el("span", { class: "legend__swatch", "aria-hidden": "true" }),
@@ -113,14 +150,27 @@ export function renderFigure(figureEl, legendEl, lga, layer) {
     ])
   );
   if (layer === "suspects" && lga.suspects) legendEl.replaceChildren(suspectsLegend(lga.suspects.counts));
+  else if (layer === "standing" && lga.standing) legendEl.replaceChildren(standingLegend(lga.standing));
   else if (layer === "frequency" && lga.frequency) legendEl.replaceChildren(frequencyLegend(lga.frequency));
   else if (layer === "event" && lga.events[0]) legendEl.replaceChildren(eventLegend(lga.events[0].date));
   else legendEl.replaceChildren();
 }
 
-export function renderHotspots(list, heading, hotspots, layer, onSelect) {
+function waterFlag(status, standing) {
+  if (!standing) return [];
+  if (status === "standing") {
+    return [el("span", { class: "hotspot__flag", text: `Still under water on ${formatDate(standing.after)}` })];
+  }
+  if (status === "not_imaged") {
+    return [el("span", { class: "hotspot__flag hotspot__flag--muted", text: `Not imaged on ${formatDate(standing.after)}` })];
+  }
+  return [];
+}
+
+export function renderHotspots(list, heading, hotspots, layer, onSelect, lga) {
   const headings = {
     suspects: "Priority sites",
+    standing: "Largest areas still under water",
     frequency: "Places that flood year after year",
   };
   heading.textContent = headings[layer] ?? "Largest flooded areas";
@@ -145,7 +195,10 @@ export function renderHotspots(list, heading, hotspots, layer, onSelect) {
           },
           [
             el("span", { class: "hotspot__rank", text: String(h.rank) }),
-            el("span", { class: "hotspot__place", text: h.place }),
+            el("span", { class: "hotspot__place" }, [
+              h.place,
+              ...waterFlag(h.water_now, lga?.standing),
+            ]),
             el("span", { class: "hotspot__area", text: h.kind ? KIND_LABELS[h.kind] : formatHectares(h.area_ha) }),
           ]
         ),

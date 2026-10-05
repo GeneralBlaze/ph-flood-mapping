@@ -38,6 +38,13 @@ export function keyFigure(lga, layer) {
       caption: `flooded in ${f.repeat_min_years} or more of the rainy seasons ${yearSpan(f.years)}`,
     };
   }
+  if (layer === "standing" && lga.standing) {
+    const w = lga.standing;
+    return {
+      value: formatHectares(w.hectares.standing),
+      caption: `still under water on ${formatDate(w.after)}, after the rain of ${formatDate(w.before)}`,
+    };
+  }
   const event = lga.events[0];
   if (layer === "event" && event) {
     return { value: formatHectares(event.flooded_ha), caption: `under standing water on ${formatDate(event.date)}` };

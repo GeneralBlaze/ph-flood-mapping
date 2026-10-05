@@ -46,6 +46,10 @@ function layerData(lga, layer) {
       overlayOpacity: 0.35,
     };
   }
+  if (layer === "standing" && lga.standing) {
+    const w = lga.standing;
+    return { ...w, subtitle: `still under water on ${formatDate(w.after)}`, alt: `Water still standing on ${formatDate(w.after)}` };
+  }
   if (layer === "frequency" && lga.frequency) {
     return { ...lga.frequency, subtitle: `flooded in ${lga.frequency.repeat_min_years}+ seasons`, alt: "Years flooded" };
   }
@@ -176,7 +180,7 @@ async function start() {
         ? (h) => setState({ site: h.rank })
         : (h) => map.focusHotspot(h, reducedMotion.matches);
       map.showHotspots(hotspots, data?.subtitle ?? "", state.layer === "suspects" ? select : null);
-      renderHotspots($("hotspots"), $("hotspots-heading"), hotspots, state.layer, select);
+      renderHotspots($("hotspots"), $("hotspots-heading"), hotspots, state.layer, select, lga);
       await renderSite(lga, state.layer === "suspects" ? hotspots : []);
     } catch (error) {
       if (token === renderToken) showError(error instanceof Error ? error.message : "Could not load layer data.");

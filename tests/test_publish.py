@@ -141,3 +141,41 @@ def test_suspects_entry_publishes_routes_and_obstructions(stage2_dir, tmp_path):
     assert routes["features"][0]["properties"] == {"rank": 1}
     assert routes["features"][0]["geometry"]["coordinates"][0] == [7.12346, 4.8]
     assert (web_data / entry["suspects"]["obstructions"]).exists()
+
+
+@pytest.fixture
+def standing_dir(tmp_path):
+    d = tmp_path / "data" / "ikwerre" / "standing_2026-09-29_2026-10-05-o22"
+    _write(d / "summary.json", {"lga": "Ikwerre", "before": {"date": "2026-09-29", "orbit": 22},
+                                "after": {"date": "2026-10-05", "orbit": 22},
+                                "hectares": {"drained": 10.0, "standing": 40.0, "new": 5.0}})
+    _write(d / "standing_overlay.bounds.json", [[4.9, 6.8], [5.1, 7.0]])
+    (d / "standing_overlay.png").write_bytes(b"png")
+    _write(d / "lga_boundary.geojson", {"type": "FeatureCollection", "features": []})
+    _write(d / "standing_clusters.json", [{"area_ha": 8.0, "lat": 5.0, "lon": 6.9, "place": "Isiokpo", "address": {}}])
+    return d
+
+
+def test_standing_only_lga_gets_entry_with_dates_and_hectares(standing_dir, tmp_path):
+    web_data = tmp_path / "web" / "data"
+
+    entry = build_lga_entry(standing_dir.parent, "Ikwerre", web_data)
+
+    standing = entry["standing"]
+    assert (standing["before"], standing["after"]) == ("2026-09-29", "2026-10-05")
+    assert standing["hectares"]["standing"] == 40.0
+    assert (web_data / standing["overlay"]).exists()
+    assert json.loads((web_data / standing["hotspots"]).read_text())[0]["place"] == "Isiokpo"
+    assert entry["events"] == [] and entry["suspects"] is None
+
+
+def test_site_status_is_merged_into_suspects():
+    from analysis.publish import merge_site_status
+
+    suspects = [{"rank": 1, "place": "A"}, {"rank": 2, "place": "B"}]
+    statuses = [{"rank": 2, "status": "standing", "after_frac": 0.3, "before_frac": 0.0}]
+
+    merged = merge_site_status(suspects, statuses)
+
+    assert merged == [{"rank": 1, "place": "A", "water_now": None}, {"rank": 2, "place": "B", "water_now": "standing"}]
+    assert "water_now" not in suspects[0]

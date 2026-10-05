@@ -11,6 +11,11 @@
   --signal: #c2410c;
   --signal-ink: #ffffff;
   --event: #1f6fff;
+  /* Standing water after a dry spell: same colours as the published overlay */
+  --water-standing: #0b3fa8;
+  --water-drained: #a9c8f0;
+  --water-new: #3d8fd9;
+  --water-unseen: #8a8a8a;
   --channel: #0891b2;
   --obstruction: #dc2626;
   --hand-gradient: linear-gradient(90deg, #f7f1e1, #e8d8b0, #d4b97f, #b8925a, #8c5a2b, #5c3a1c);

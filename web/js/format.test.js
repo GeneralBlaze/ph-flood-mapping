@@ -100,3 +100,27 @@ test("writeState includes the selected site", () => {
   const query = writeState({ lga: "obio-akpor", layer: "suspects", boundary: true, drainage: false, hand: false, site: 3 });
   assert.equal(query, "?lga=obio-akpor&layer=suspects&site=3");
 });
+
+const withStanding = {
+  lgas: [
+    {
+      slug: "ikwerre",
+      name: "Ikwerre",
+      frequency: null,
+      events: [],
+      standing: { before: "2026-09-29", after: "2026-10-05", hectares: { drained: 10, standing: 465.1, new: 5 } },
+    },
+  ],
+};
+
+test("keyFigure for standing water reports hectares still wet on the later date", () => {
+  const figure = keyFigure(withStanding.lgas[0], "standing");
+  assert.equal(figure.value, "465 ha");
+  assert.match(figure.caption, /5 Oct 2026/);
+  assert.match(figure.caption, /29 Sep/);
+});
+
+test("readState defaults to standing water when it is the only layer", () => {
+  assert.equal(readState("", withStanding).layer, "standing");
+  assert.equal(readState("?layer=standing", withStanding).layer, "standing");
+});
