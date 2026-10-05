@@ -222,14 +222,22 @@ export function createMap(container) {
       }).addTo(local);
     },
 
-    showLocal({ segments, pools }, reducedMotion) {
-      if (pools) L.imageOverlay(pools.url, pools.bounds, { opacity: 0.75, alt: "Hollows where water ponds" }).addTo(local);
+    // Route from a tapped spot, drawn like a priority site's route; plus the hollow it starts in
+    showLocal({ route, pool }, reducedMotion) {
+      if (pool) L.imageOverlay(pool.url, pool.bounds, { opacity: 0.75, alt: "Hollow where water ponds" }).addTo(local);
       localFlowLayer?.remove();
+      localFlowLayer = null;
+      if (!route) return;
+      L.polyline(route.map(([lon, lat]) => [lat, lon]), { color: "#ffffff", weight: 7, opacity: 0.85, interactive: false })
+        .addTo(local);
+      // ~60 m pieces (every 3rd 19 m cell) so each is long enough on screen to carry an arrow
+      const points = route.filter((_, i) => i % 3 === 0 || i === route.length - 1);
+      const rows = points.slice(1).map(([lon, lat], i) => [points[i][0], points[i][1], lon, lat, ROUTE_UPSTREAM_KM2]);
       localFlowLayer = createFlowLayer({
-        colour: cssVar("--channel"), reducedMotion, arrowPx: 2.5, lineAlpha: 0.8, widthScale: 0.7,
-        pane: "localFlowPane", zIndex: 455, casing: false,
+        colour: cssVar("--channel"), reducedMotion, arrowPx: 3, lineAlpha: 1, widthScale: 1,
+        pane: "localFlowPane", zIndex: 455,
       }).addTo(map);
-      localFlowLayer.setData(segments);
+      localFlowLayer.setData(rows);
     },
 
     clearLocal() {

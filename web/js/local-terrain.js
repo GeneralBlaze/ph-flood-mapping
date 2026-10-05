@@ -6,7 +6,7 @@ const OFFSET_M = 32768;
 const NEIGHBOURS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
 export const POOL_MIN_DEPTH_M = 0.3; // shallower than this is within the elevation data's noise
-const FLAT_DROP_M = 0.5; // less than this over 300 m reads as flat
+const FLAT_DROP_M = 0.3; // a route dropping less than this is over nearly flat ground
 const DISTANCE_STEP_M = 50;
 
 export function decodeTerrarium(rgba) {
@@ -103,44 +103,11 @@ export function flowDirections(filled, w, h) {
   return dirs;
 }
 
-/** Least-squares plane: downhill bearing (degrees from north) and drop over 300 m. */
-export function planeFit(heights, w, h, cellXm, cellYm) {
-  let n = 0, sx = 0, sy = 0, sz = 0, sxx = 0, syy = 0, sxz = 0, syz = 0;
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      const x = c * cellXm, y = -r * cellYm, z = heights[r * w + c]; // y grows northward
-      n++; sx += x; sy += y; sz += z; sxx += x * x; syy += y * y; sxz += x * z; syz += y * z;
-    }
-  }
-  const gx = (sxz - (sx * sz) / n) / (sxx - (sx * sx) / n); // metres per metre, eastward
-  const gy = (syz - (sy * sz) / n) / (syy - (sy * sy) / n); // northward
-  const bearing = ((Math.atan2(-gx, -gy) * 180) / Math.PI + 360) % 360; // direction of descent
-  return { bearing, dropPer300m: Math.hypot(gx, gy) * 300 };
-}
-
 export function compass(bearing) {
   return COMPASS[Math.round(bearing / 45) % 8];
 }
 
 const rounded = (m) => Math.max(DISTANCE_STEP_M, Math.round(m / DISTANCE_STEP_M) * DISTANCE_STEP_M);
-
-/** One or two plain sentences about the ground at a spot. */
-export function describeSpot({ pondDepth, nearestPool, bearing, dropPer300m }) {
-  const parts = [];
-  if (pondDepth >= POOL_MIN_DEPTH_M) {
-    parts.push(`This spot sits in a hollow about ${pondDepth.toFixed(1)} m deep: water collects here before it can flow away.`);
-  } else if (dropPer300m < FLAT_DROP_M) {
-    parts.push("The ground here is nearly flat, so water drains slowly and relies on drains and gutters.");
-  } else {
-    parts.push(`The ground here falls gently to the ${compass(bearing)}, about ${dropPer300m.toFixed(1)} m over 300 m.`);
-  }
-  if (nearestPool) {
-    parts.push(`The nearest hollow, about ${nearestPool.depth.toFixed(1)} m deep, is about ${rounded(nearestPool.distance)} m ${nearestPool.direction}.`);
-  } else if (pondDepth < POOL_MIN_DEPTH_M) {
-    parts.push(`No hollow deeper than ${POOL_MIN_DEPTH_M} m nearby in the 30 m elevation data, so pools here likely come from blocked drains or dips too small for it to see.`);
-  }
-  return parts.join(" ");
-}
 
 /** Cells draining through each cell, itself included. dirs from flowDirections. */
 export function accumulate(dirs) {
@@ -191,8 +158,31 @@ export function nearbyLandmarks(lat, lon, rows, maxM, limit) {
     .join(" · ");
 }
 
-/** Draw a cell if water gathers there (a runoff line) or it falls on the sparse arrow grid. */
-export function keepForDisplay(i, acc, w, minRunoffCells, gridStep) {
-  const r = Math.floor(i / w), c = i % w;
-  return acc[i] >= minRunoffCells || (r % gridStep === 0 && c % gridStep === 0);
+
+/** Cells from start following dirs until stop(i) is true, the window edge (-1), or maxSteps. */
+export function traceRoute(dirs, start, stop, maxSteps) {
+  const route = [start];
+  let i = start;
+  for (let step = 0; step < maxSteps && !stop(i) && dirs[i] >= 0; step++) {
+    i = dirs[i];
+    route.push(i);
+  }
+  return route;
+}
+
+const ENDINGS = {
+  channel: "to a natural drainage line",
+  edge: "and carry on beyond the analysed area",
+};
+
+/** Plain account of the route water takes from a tapped spot. */
+export function describeRoute({ pondDepth, lengthM, bearing, dropM, end }) {
+  const parts = [];
+  const lead = pondDepth >= POOL_MIN_DEPTH_M ? "Once it spills, it should run" : "Water from this spot should run";
+  if (pondDepth >= POOL_MIN_DEPTH_M) {
+    parts.push(`This spot sits in a hollow about ${pondDepth.toFixed(1)} m deep: water has to rise that much before it can flow away.`);
+  }
+  const fall = dropM < FLAT_DROP_M ? "over nearly flat ground" : `dropping about ${dropM.toFixed(1)} m`;
+  parts.push(`${lead} about ${rounded(lengthM)} m to the ${compass(bearing)}, ${fall}, ${ENDINGS[end]}.`);
+  return parts.join(" ");
 }

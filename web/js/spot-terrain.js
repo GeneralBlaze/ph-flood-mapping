@@ -1,17 +1,18 @@
 import {
-  POOL_MIN_DEPTH_M, accumulate, keepForDisplay, compass, decodeTerrarium, describeSpot, flowDirections, offsetM, planeFit, priorityFlood,
+  POOL_MIN_DEPTH_M, accumulate, decodeTerrarium, describeRoute, flowDirections, offsetM, priorityFlood, traceRoute,
 } from "./local-terrain.js";
 
-// Reads the published Terrarium tiles around a spot (zoom 13, ~19 m per pixel) and
-// works out local runoff: arrows for every pixel, hollows where water ponds, and a
-// sentence about the ground. Everything runs in the browser from files we host.
+// The path water takes from one tapped spot, worked out in the browser from the
+// published Terrarium tiles (zoom 13, ~19 m per pixel): fill hollows, follow the
+// steepest way down from the spot, and stop at a natural drainage line.
 const ZOOM = 13;
 const TILE = 256;
-const RADIUS_M = 500;
+const RADIUS_M = 1500;
 const FILL_EPS_M = 0.001;
+const CHANNEL_KM2 = 1; // same threshold as the pipeline's drainage channels
+const MAX_STEPS = 150; // ~3 km
+const SAME_LEVEL_M = 0.05; // cells within this of the spot's water level belong to its hollow
 const POOL_RGBA = [56, 130, 220]; // blue: water only
-const RUNOFF_MIN_CELLS = 6; // cells gathering this much water are drawn as runoff lines
-const ARROW_GRID = 4; // otherwise one direction arrow every 4 cells (~75 m)
 
 function worldPixel(lat, lon) {
   const n = TILE * 2 ** ZOOM;
@@ -37,7 +38,7 @@ function loadImage(url) {
   });
 }
 
-/** Height window centred on (lat, lon): { heights, w, h, x0, y0, cellXm, cellYm } in world pixels. */
+/** Height window centred on (lat, lon), in world pixels at ZOOM. */
 async function sampleWindow(view3d, dataRoot, lat, lon) {
   const [cx, cy] = worldPixel(lat, lon);
   const metresPerPixel = (40075016.7 * Math.cos((lat * Math.PI) / 180)) / (TILE * 2 ** ZOOM);
@@ -57,66 +58,78 @@ async function sampleWindow(view3d, dataRoot, lat, lon) {
   );
   images.forEach((img, i) => ctx.drawImage(img, tiles[i][0] * TILE - x0, tiles[i][1] * TILE - y0));
   const heights = decodeTerrarium(ctx.getImageData(0, 0, size, size).data);
-  return { heights, w: size, h: size, x0, y0, cellXm: metresPerPixel, cellYm: metresPerPixel };
+  return { heights, size, x0, y0, metresPerPixel };
 }
 
-function poolImage(depth, w, h) {
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  const image = ctx.createImageData(w, h);
-  for (let i = 0; i < depth.length; i++) {
-    if (depth[i] < POOL_MIN_DEPTH_M) continue;
-    image.data.set([...POOL_RGBA, Math.min(230, 150 + depth[i] * 150)], i * 4);
+/** Cells of the hollow the spot sits in: connected, still under water at the spot's water level. */
+function hollowCells(start, filled, depth, size) {
+  const level = filled[start];
+  const seen = new Set([start]);
+  const stack = [start];
+  while (stack.length) {
+    const i = stack.pop();
+    const r = Math.floor(i / size), c = i % size;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const nr = r + dr, nc = c + dc, n = nr * size + nc;
+        if (nr < 0 || nc < 0 || nr >= size || nc >= size || seen.has(n)) continue;
+        if (depth[n] > SAME_LEVEL_M && Math.abs(filled[n] - level) < SAME_LEVEL_M) {
+          seen.add(n);
+          stack.push(n);
+        }
+      }
+    }
   }
+  return seen;
+}
+
+function poolImage(cells, depth, size) {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const image = ctx.createImageData(size, size);
+  for (const i of cells) image.data.set([...POOL_RGBA, Math.min(230, 150 + depth[i] * 150)], i * 4);
   ctx.putImageData(image, 0, 0);
   return canvas.toDataURL("image/png");
 }
 
-function nearestPool(depth, w, h, lat, lon, toLonLat) {
-  const centre = Math.floor(h / 2) * w + Math.floor(w / 2);
-  let best = null;
-  for (let i = 0; i < depth.length; i++) {
-    if (depth[i] < POOL_MIN_DEPTH_M || i === centre) continue;
-    const [plon, plat] = toLonLat(i);
-    const [north, east] = offsetM(lat, lon, plat, plon);
-    const distance = Math.hypot(north, east);
-    if (!best || distance < best.distance) {
-      best = { distance, depth: depth[i], direction: compass((Math.atan2(east, north) * 180) / Math.PI + 360) };
-    }
-  }
-  return best;
-}
-
-/** Local runoff around a spot, ready for the map and the panel. */
+/** Route water takes from the spot, the hollow it sits in (if any) and a sentence about it. */
 export async function analyseSpot(view3d, dataRoot, lat, lon) {
-  const { heights, w, h, x0, y0, cellXm, cellYm } = await sampleWindow(view3d, dataRoot, lat, lon);
-  const filled = priorityFlood(heights, w, h, FILL_EPS_M);
+  const { heights, size, x0, y0, metresPerPixel } = await sampleWindow(view3d, dataRoot, lat, lon);
+  const filled = priorityFlood(heights, size, size, FILL_EPS_M);
   const depth = filled.map((z, i) => z - heights[i]);
-  const dirs = flowDirections(filled, w, h);
+  const dirs = flowDirections(filled, size, size);
   const acc = accumulate(dirs);
-  const toLonLat = (i) => pixelLonLat(x0 + (i % w) + 0.5, y0 + Math.floor(i / w) + 0.5);
-  const segments = [];
-  for (let i = 0; i < dirs.length; i++) {
-    if (dirs[i] < 0 || !keepForDisplay(i, acc, w, RUNOFF_MIN_CELLS, ARROW_GRID)) continue;
-    const [lon1, lat1] = toLonLat(i);
-    const [lon2, lat2] = toLonLat(dirs[i]);
-    segments.push([lon1, lat1, lon2, lat2, acc[i] * cellXm * cellYm / 1e6]); // km² draining through
+  const channelCells = (CHANNEL_KM2 * 1e6) / metresPerPixel ** 2;
+  const start = Math.floor(size / 2) * size + Math.floor(size / 2);
+  const cells = traceRoute(dirs, start, (i) => acc[i] >= channelCells, MAX_STEPS);
+  const toLonLat = (i) => pixelLonLat(x0 + (i % size) + 0.5, y0 + Math.floor(i / size) + 0.5);
+  const route = cells.map(toLonLat);
+
+  const last = cells[cells.length - 1];
+  const [endLon, endLat] = route[route.length - 1];
+  const [north, east] = offsetM(lat, lon, endLat, endLon);
+  const lengthM = route.slice(1).reduce((sum, [lo, la], i) => {
+    const [n, e] = offsetM(route[i][1], route[i][0], la, lo);
+    return sum + Math.hypot(n, e);
+  }, 0);
+  const pondDepth = depth[start];
+  let pool = null;
+  if (pondDepth >= POOL_MIN_DEPTH_M) {
+    const [west, top] = pixelLonLat(x0, y0);
+    const [eastEdge, bottom] = pixelLonLat(x0 + size, y0 + size);
+    pool = { url: poolImage(hollowCells(start, filled, depth, size), depth, size), bounds: [[bottom, west], [top, eastEdge]] };
   }
-  const [west, north] = pixelLonLat(x0, y0);
-  const [east, south] = pixelLonLat(x0 + w, y0 + h);
-  const centre = Math.floor(h / 2) * w + Math.floor(w / 2);
-  const plane = planeFit(heights, w, h, cellXm, cellYm);
-  const pool = nearestPool(depth, w, h, lat, lon, toLonLat);
   return {
-    segments,
-    pools: { url: poolImage(depth, w, h), bounds: [[south, west], [north, east]] },
-    sentence: describeSpot({
-      pondDepth: depth[centre],
-      nearestPool: depth[centre] >= POOL_MIN_DEPTH_M ? null : pool,
-      bearing: plane.bearing,
-      dropPer300m: plane.dropPer300m,
+    route: route.length > 1 ? route : null,
+    pool,
+    sentence: describeRoute({
+      pondDepth,
+      lengthM,
+      bearing: ((Math.atan2(east, north) * 180) / Math.PI + 360) % 360,
+      dropM: Math.max(0, filled[start] - heights[last]),
+      end: acc[last] >= channelCells ? "channel" : "edge",
     }),
   };
 }

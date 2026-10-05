@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { accumulate, decodeTerrarium, describeSpot, flowDirections, keepForDisplay, nearbyLandmarks, planeFit, priorityFlood } from "./local-terrain.js";
+import { accumulate, decodeTerrarium, describeRoute, flowDirections, nearbyLandmarks, priorityFlood, traceRoute } from "./local-terrain.js";
 
 // 5x5 bowl: centre 1 m, ring 3 m, gap of 2 m to the east, falling to 0 at the east edge.
 const BOWL = Float64Array.from([
@@ -30,30 +30,27 @@ test("flowDirections points the hollow towards its outlet", () => {
   assert.equal(dirs[14], -1); // edge outlet
 });
 
-test("planeFit finds the downhill bearing and drop", () => {
-  // Falls 1 m per cell to the east (+x), 20 m cells
-  const w = 5, h = 5;
-  const heights = Float64Array.from({ length: w * h }, (_, i) => 10 - (i % w));
-  const fit = planeFit(heights, w, h, 20, 20);
-  assert.ok(Math.abs(fit.bearing - 90) < 1);
-  assert.ok(Math.abs(fit.dropPer300m - 15) < 0.01);
+test("traceRoute follows directions until the stop test or the window edge", () => {
+  const dirs = Int32Array.from([1, 2, 3, -1]);
+  assert.deepEqual(traceRoute(dirs, 0, () => false, 10), [0, 1, 2, 3]);
+  assert.deepEqual(traceRoute(dirs, 0, (i) => i === 2, 10), [0, 1, 2]);
+  assert.deepEqual(traceRoute(dirs, 0, () => false, 1), [0, 1]);
 });
 
-test("describeSpot reports a hollow when the spot ponds", () => {
-  const text = describeSpot({ pondDepth: 0.8, nearestPool: null, bearing: 135, dropPer300m: 1.2 });
-  assert.match(text, /hollow about 0\.8 m deep/);
+test("describeRoute: water runs off to a drainage line", () => {
+  const text = describeRoute({ pondDepth: 0, lengthM: 412, bearing: 265, dropM: 1.24, end: "channel" });
+  assert.equal(text, "Water from this spot should run about 400 m to the west, dropping about 1.2 m, to a natural drainage line.");
 });
 
-test("describeSpot reports gentle slope and no hollow", () => {
-  const text = describeSpot({ pondDepth: 0, nearestPool: null, bearing: 135, dropPer300m: 1.2 });
-  assert.match(text, /falls gently to the south-east, about 1\.2 m over 300 m/);
-  assert.match(text, /No hollow deeper than 0\.3 m/);
+test("describeRoute: spot in a hollow spills out first", () => {
+  const text = describeRoute({ pondDepth: 0.46, lengthM: 180, bearing: 90, dropM: 0.3, end: "edge" });
+  assert.equal(text, "This spot sits in a hollow about 0.5 m deep: water has to rise that much before it can flow away. " +
+    "Once it spills, it should run about 200 m to the east, dropping about 0.3 m, and carry on beyond the analysed area.");
 });
 
-test("describeSpot calls near-flat ground flat and mentions a nearby pool", () => {
-  const text = describeSpot({ pondDepth: 0, nearestPool: { depth: 0.6, distance: 180, direction: "north" }, bearing: 10, dropPer300m: 0.2 });
-  assert.match(text, /nearly flat/);
-  assert.match(text, /nearest hollow, about 0\.6 m deep, is about 200 m north/);
+test("describeRoute: nearly flat route says so", () => {
+  const text = describeRoute({ pondDepth: 0, lengthM: 300, bearing: 0, dropM: 0.1, end: "edge" });
+  assert.match(text, /over nearly flat ground/);
 });
 
 test("accumulate counts cells draining through each cell", () => {
@@ -67,13 +64,3 @@ test("nearbyLandmarks lists the closest within range with distance and direction
   assert.equal(nearbyLandmarks(4.8, 7.0, [], 600, 3), null);
 });
 
-test("keepForDisplay keeps runoff lines and a sparse grid of direction arrows", () => {
-  const w = 8, h = 8;
-  const acc = new Float64Array(w * h).fill(1);
-  acc[3 * w + 5] = 9; // a gathering runoff cell off the grid
-  const keep = (i) => keepForDisplay(i, acc, w, 6, 4);
-  assert.equal(keep(0), true); // grid point (0,0)
-  assert.equal(keep(4 * w + 4), true); // grid point (4,4)
-  assert.equal(keep(1 * w + 2), false); // ordinary cell
-  assert.equal(keep(3 * w + 5), true); // runoff
-});

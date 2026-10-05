@@ -199,12 +199,13 @@ async function start() {
   }
 
   async function showGround(lga, site, key, token) {
-    if (!lga.view3d) return;
+    // Priority sites already have their street-level route; trace one for any other point or spot
+    if (!lga.view3d || currentSite?.route) return;
     try {
       const local = await analyseSpot(lga.view3d, DATA_ROOT, site.lat, site.lon);
       if (token !== renderToken) return;
       map.showLocal(local, reducedMotion.matches);
-      ground = { key, sentence: `Ground at this spot: ${local.sentence}` };
+      ground = { key, sentence: local.sentence };
       renderSiteReport(site, ground.sentence);
     } catch {
       // Outside the terrain tiles (beyond the analysed LGAs): the satellite view still works
