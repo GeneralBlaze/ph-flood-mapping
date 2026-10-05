@@ -168,6 +168,25 @@ def _standing_entry(standing: Path, slug: str, web_data: Path) -> dict[str, Any]
     }
 
 
+# Reasons written by Stage 5 from the 90 m route; Stage 6's 30 m street account supersedes them.
+OLD_ROUTE_MARKERS = ("route water should take", "natural drainage path", "no traceable route")
+
+
+def apply_stories(suspects: list[dict[str, Any]], stories: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Copy of suspects with the Stage 6 street account; the older 90 m route reason and count are replaced."""
+    by_rank = {s["rank"]: s for s in stories}
+    out = []
+    for suspect in suspects:
+        story = by_rank.get(suspect["rank"])
+        if story is None:
+            out.append({**suspect, "story": None})
+            continue
+        reasons = [r for r in suspect["reasons"] if not any(m in r.lower() for m in OLD_ROUTE_MARKERS)]
+        out.append({**suspect, "reasons": reasons, "story": story["story"],
+                    "path_buildings": sum(story["buildings_by_street"].values())})
+    return out
+
+
 def _suspects_entry(stage5: Path, slug: str, web_data: Path, standing: Path | None) -> dict[str, Any]:
     summary = _read(stage5 / "summary.json")
     listed = f"{slug}/suspects.json"
@@ -179,6 +198,9 @@ def _suspects_entry(stage5: Path, slug: str, web_data: Path, standing: Path | No
     status_file = standing / "site_status.json" if standing else None
     if status_file and status_file.exists():
         public = merge_site_status(public, _read(status_file))
+    stage6 = stage5.parent / "stage6_streets"
+    if (stage6 / "stories.json").exists():
+        public = apply_stories(public, _read(stage6 / "stories.json"))
     _write_json(web_data / listed, public)
     features = [
         {"type": "Feature", "properties": {"rank": f["properties"]["rank"]},
@@ -189,7 +211,8 @@ def _suspects_entry(stage5: Path, slug: str, web_data: Path, standing: Path | No
     _write_json(web_data / areas, {"type": "FeatureCollection", "features": features})
     extras = {}
     for name in ("routes", "obstructions"):
-        source = stage5 / f"{name}.geojson"
+        # Prefer the 30 m street-level routes when Stage 6 has run
+        source = stage6 / f"{name}.geojson" if (stage6 / f"{name}.geojson").exists() else stage5 / f"{name}.geojson"
         if source.exists():
             extras[name] = f"{slug}/{name}.geojson"
             _write_json(web_data / extras[name], _rank_features(_read(source)))

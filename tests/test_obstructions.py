@@ -30,3 +30,12 @@ def test_describe_route_counts_buildings_and_length():
     assert describe_route(0, 180) == (
         "No buildings found on the route water should take from here to the nearest drainage channel (about 180 m)"
     )
+
+
+def test_as_polygon_list_handles_one_building_or_many():
+    from analysis.obstructions import as_polygon_list
+
+    ring = [[7.0, 4.8], [7.001, 4.8], [7.001, 4.801], [7.0, 4.8]]
+    assert as_polygon_list([ring]) == [[ring]]            # single Polygon: list of rings
+    assert as_polygon_list([[ring], [ring]]) == [[ring], [ring]]  # MultiPolygon: list of polygons
+    assert as_polygon_list([]) == []

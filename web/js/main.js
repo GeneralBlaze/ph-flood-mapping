@@ -60,6 +60,15 @@ function layerData(lga, layer) {
   return null;
 }
 
+function renderSiteReport(hotspot) {
+  const story = hotspot?.story;
+  $("site-report").hidden = !story?.length;
+  if (!story?.length) return;
+  $("site-report-place").textContent = `${hotspot.rank}. ${hotspot.place}`;
+  $("site-report-story").replaceChildren(...story.map((line) => el("p", { text: line })));
+  $("sheet-content").scrollTop = 0;
+}
+
 function setupSheetCollapse() {
   const button = $("sheet-collapse");
   const sheet = $("sheet");
@@ -112,6 +121,7 @@ async function start() {
   async function renderSite(lga, hotspots) {
     const hotspot = state.site ? hotspots.find((h) => h.rank === state.site) : null;
     $("site-bar").hidden = !hotspot;
+    renderSiteReport(hotspot);
     if (!hotspot) {
       focusedSite = null;
       map.clearSite();

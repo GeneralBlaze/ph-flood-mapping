@@ -191,3 +191,21 @@ def test_landmarks_are_published_and_hotspots_get_nearby_line(stage2_dir, tmp_pa
     assert json.loads((web_data / entry["landmarks"]).read_text()) == [[4.9009, 7.0, "market", "Eneka Market"]]
     hotspot = json.loads((web_data / entry["events"][0]["hotspots"]).read_text())[0]
     assert hotspot["nearby"] == "Eneka Market, 100 m north"
+
+
+def test_apply_stories_adds_story_and_replaces_old_route_reason():
+    from analysis.publish import apply_stories
+
+    suspects = [{"rank": 1, "reasons": ["Flooded in 4 of 6 seasons",
+                                        "62 buildings stand on or beside the route water should take from here",
+                                        "Built-up land (buildings, roads, paving): 80%"], "path_buildings": 62},
+                {"rank": 2, "reasons": ["x"], "path_buildings": None}]
+    stories = [{"rank": 1, "story": ["Line one.", "Line two."], "buildings_by_street": {"A": 3, "None": 2}}]
+
+    out = apply_stories(suspects, stories)
+
+    assert out[0]["story"] == ["Line one.", "Line two."]
+    assert out[0]["reasons"] == ["Flooded in 4 of 6 seasons", "Built-up land (buildings, roads, paving): 80%"]
+    assert out[0]["path_buildings"] == 5
+    assert out[1] == {"rank": 2, "reasons": ["x"], "path_buildings": None, "story": None}
+    assert suspects[0]["path_buildings"] == 62

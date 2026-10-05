@@ -43,6 +43,14 @@ def describe_route(count: int, length_m: float) -> str:
     return f"{count} {noun} {verb} on or beside {where}"
 
 
+def as_polygon_list(coordinates: list) -> list:
+    """Earth Engine returns one building as Polygon coordinates and several as MultiPolygon; always give polygons."""
+    if not coordinates:
+        return []
+    is_single_polygon = isinstance(coordinates[0][0][0], (int, float))
+    return [coordinates] if is_single_polygon else coordinates
+
+
 def buildings_on_paths(
     corridors: dict[int, list[BaseGeometry]], sites: dict[int, BaseGeometry]
 ) -> dict[int, dict[str, Any]]:
@@ -70,6 +78,7 @@ def buildings_on_paths(
         "site", None,
     ).setGeometry(None)).getInfo()
     return {
-        int(f["properties"]["sid"]): {"count": f["properties"]["count"], "footprints": f["properties"]["footprints"]}
+        int(f["properties"]["sid"]): {"count": f["properties"]["count"],
+                                      "footprints": as_polygon_list(f["properties"]["footprints"])}
         for f in joined["features"]
     }
