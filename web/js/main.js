@@ -3,6 +3,7 @@ import { formatDate } from "./format.js";
 import { createMap } from "./map.js";
 import { renderFigure, renderHotspots, renderLayerControls, renderLgaSelect, renderTerrainControls } from "./panel.js";
 import { defaultLayer, isLayerAvailable, readState, writeState } from "./state.js";
+import { open3d } from "./view3d.js";
 
 const DATA_ROOT = "data/";
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -69,6 +70,54 @@ function renderSiteReport(hotspot) {
   $("sheet-content").scrollTop = 0;
 }
 
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// The 3D view is a modal over the map; currentSite holds what it needs for the open site.
+function setup3d(getSite) {
+  const dialog = $("view3d");
+  const opener = $("site-3d");
+  let close = null;
+
+  async function show() {
+    const site = getSite();
+    if (!site) return;
+    dialog.hidden = false;
+    $("view3d-title").textContent = `3D view · ${site.hotspot.rank}. ${site.hotspot.place}`;
+    $("view3d-close").focus();
+    try {
+      const areas = await fetchJson(site.lga.suspects.areas);
+      close = await open3d({
+        container: $("view3d-map"),
+        view3d: site.lga.view3d,
+        dataRoot: DATA_ROOT,
+        hotspot: site.hotspot,
+        area: areas.features.find((f) => f.properties.rank === site.hotspot.rank) ?? null,
+        route: site.route,
+        colours: { signal: cssVar("--signal"), channel: cssVar("--channel"), obstruction: cssVar("--obstruction") },
+        reducedMotion: reducedMotion.matches,
+      });
+    } catch (error) {
+      $("view3d-map").replaceChildren(
+        el("p", { class: "status status--error", role: "alert", text: "The 3D view could not be loaded on this device." })
+      );
+    }
+  }
+
+  function hide() {
+    close?.();
+    close = null;
+    $("view3d-map").replaceChildren();
+    dialog.hidden = true;
+    opener.focus();
+  }
+
+  opener.addEventListener("click", show);
+  $("view3d-close").addEventListener("click", hide);
+  dialog.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hide();
+  });
+}
+
 function setupSheetCollapse() {
   const button = $("sheet-collapse");
   const sheet = $("sheet");
@@ -110,6 +159,7 @@ async function start() {
   let renderToken = 0;
   let focusedSite = null; // avoids re-flying to the same site on unrelated re-renders
   let basemap = "satellite";
+  let currentSite = null; // { lga, hotspot, route } while a site is open
 
   const setBasemap = (kind) => {
     basemap = kind;
@@ -122,7 +172,9 @@ async function start() {
     const hotspot = state.site ? hotspots.find((h) => h.rank === state.site) : null;
     $("site-bar").hidden = !hotspot;
     renderSiteReport(hotspot);
+    $("site-3d").hidden = !(hotspot && lga.view3d);
     if (!hotspot) {
+      currentSite = null;
       focusedSite = null;
       map.clearSite();
       map.setBasemap("street");
@@ -137,6 +189,7 @@ async function start() {
       lga.suspects.obstructions ? fetchJson(lga.suspects.obstructions) : Promise.resolve(null),
     ]);
     const route = routes?.features.find((f) => f.properties.rank === hotspot.rank) ?? null;
+    currentSite = { lga, hotspot, route };
     const buildings = obstructions
       ? { ...obstructions, features: obstructions.features.filter((f) => f.properties.rank === hotspot.rank) }
       : null;
@@ -201,6 +254,7 @@ async function start() {
     }
   }
 
+  setup3d(() => currentSite);
   $("site-back").addEventListener("click", () => setState({ site: null }, { refit: true }));
   $("basemap-satellite").addEventListener("click", () => setBasemap("satellite"));
   $("basemap-street").addEventListener("click", () => setBasemap("street"));

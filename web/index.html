@@ -49,7 +49,27 @@
           <button type="button" id="basemap-satellite" aria-pressed="true">Satellite</button>
           <button type="button" id="basemap-street" aria-pressed="false">Map</button>
         </div>
+        <button type="button" class="site-bar__back" id="site-3d" hidden>3D view</button>
         <button type="button" class="site-bar__back" id="site-back">Back to overview</button>
+      </div>
+    </section>
+
+    <section class="view3d" id="view3d" role="dialog" aria-modal="true" aria-labelledby="view3d-title" hidden>
+      <div class="view3d__map" id="view3d-map"></div>
+      <div class="view3d__bar">
+        <div class="view3d__text">
+          <h2 class="view3d__title" id="view3d-title">3D view</h2>
+          <p class="view3d__note">
+            Ground heights exaggerated 4× so small dips show; buildings to scale. Drag to move; right-drag or
+            two fingers to tilt and turn.
+          </p>
+          <ul class="site-bar__key" aria-label="Key">
+            <li><span class="key key--site" aria-hidden="true"></span>Flooded area</li>
+            <li><span class="key key--route" aria-hidden="true"></span>Route water should take (pale to strong)</li>
+            <li><span class="key key--building" aria-hidden="true"></span>Buildings on that route</li>
+          </ul>
+        </div>
+        <button type="button" class="site-bar__back" id="view3d-close">Close 3D</button>
       </div>
     </section>
 

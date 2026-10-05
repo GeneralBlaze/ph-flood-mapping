@@ -228,6 +228,18 @@ def _rank_features(collection: dict[str, Any]) -> dict[str, Any]:
     ]}
 
 
+def _view3d_entry(stage7: Path, slug: str, web_data: Path) -> dict[str, Any]:
+    summary = _read(stage7 / "summary.json")
+    terrain, buildings = web_data / slug / "terrain3d", web_data / slug / "buildings3d"
+    for source, target in ((stage7 / "terrain", terrain), (stage7 / "buildings", buildings)):
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(source, target)
+    low, high = summary["terrain_zooms"]
+    return {"terrain": f"{slug}/terrain3d/{{z}}/{{x}}/{{y}}.png", "minzoom": low, "maxzoom": high,
+            "bounds": summary["terrain_bounds"], "buildings": f"{slug}/buildings3d"}
+
+
 def _publish_landmarks(lga_dir: Path, slug: str, web_data: Path) -> tuple[list[dict[str, Any]], str | None]:
     """Compact [[lat, lon, kind, name], ...] for the map; also returns the parsed list."""
     cache = lga_dir / "osm_landmarks.json"
@@ -264,6 +276,7 @@ def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
     stage4 = _latest(lga_dir, "stage4_*")
     stage5 = _latest(lga_dir, "stage5_*")
     standing = _latest(lga_dir, "standing_*")
+    stage7 = lga_dir / "stage7_3d"
     if stage2 is None and stage3 is None and standing is None:
         raise ValueError(f"No finished outputs in {lga_dir}")
 
@@ -278,6 +291,7 @@ def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
         "terrain": _terrain_entry(stage4, slug, web_data) if stage4 else None,
         "suspects": _suspects_entry(stage5, slug, web_data, standing) if stage5 else None,
         "standing": _standing_entry(standing, slug, web_data) if standing else None,
+        "view3d": _view3d_entry(stage7, slug, web_data) if (stage7 / "summary.json").exists() else None,
     }
     landmarks, landmarks_path = _publish_landmarks(lga_dir, slug, web_data)
     for path in _hotspot_files(entry) if landmarks else []:

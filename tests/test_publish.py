@@ -209,3 +209,20 @@ def test_apply_stories_adds_story_and_replaces_old_route_reason():
     assert out[0]["path_buildings"] == 5
     assert out[1] == {"rank": 2, "reasons": ["x"], "path_buildings": None, "story": None}
     assert suspects[0]["path_buildings"] == 62
+
+
+def test_view3d_entry_copies_tiles_and_buildings(stage2_dir, tmp_path):
+    d = stage2_dir.parent / "stage7_3d"
+    _write(d / "summary.json", {"terrain_zooms": [11, 13], "terrain_bounds": [6.9, 4.7, 7.1, 4.9]})
+    (d / "terrain" / "13" / "4300").mkdir(parents=True)
+    (d / "terrain" / "13" / "4300" / "4000.png").write_bytes(b"png")
+    _write(d / "buildings" / "1.geojson", {"type": "FeatureCollection", "features": []})
+    web_data = tmp_path / "web" / "data"
+
+    entry = build_lga_entry(stage2_dir.parent, "Obio/Akpor", web_data)
+
+    view = entry["view3d"]
+    assert view["terrain"] == "obio-akpor/terrain3d/{z}/{x}/{y}.png"
+    assert (view["minzoom"], view["maxzoom"], view["bounds"]) == (11, 13, [6.9, 4.7, 7.1, 4.9])
+    assert (web_data / "obio-akpor/terrain3d/13/4300/4000.png").exists()
+    assert (web_data / view["buildings"] / "1.geojson").exists()
