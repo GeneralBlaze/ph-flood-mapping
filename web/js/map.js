@@ -16,6 +16,7 @@ const SATELLITE_ATTRIBUTION =
   "Imagery &copy; Esri, Maxar, Earthstar Geographics and the GIS User Community &middot; Powered by Esri";
 const SITE_ZOOM = 17;
 const SITE_PADDING = 60;
+const POPUP_PAD_TOP_LEFT = [16, 170]; // keeps opened popups below the site bar
 const ROUTE_UPSTREAM_KM2 = 50; // draws route lines at full width
 
 function cssVar(name) {
@@ -52,6 +53,22 @@ function clearOfPanels(margin) {
   const left = isBottomSheet || collapsed ? margin : sheet.right + margin;
   const bottom = isBottomSheet ? window.innerHeight - sheet.top + margin : margin;
   return { paddingTopLeft: [left, Math.max(margin, barBottom + margin)], paddingBottomRight: [margin, bottom] };
+}
+
+// Open a marker's popup once the map has stopped moving, panned clear of the panels.
+function openPopupClear(map, marker, animated) {
+  if (!marker) return;
+  const open = () => {
+    const { paddingTopLeft, paddingBottomRight } = clearOfPanels(16);
+    const popup = marker.getPopup();
+    if (popup) {
+      popup.options.autoPanPaddingTopLeft = L.point(paddingTopLeft);
+      popup.options.autoPanPaddingBottomRight = L.point(paddingBottomRight);
+    }
+    marker.openPopup();
+  };
+  if (animated) map.once("moveend", open);
+  else open();
 }
 
 export function createMap(container) {
@@ -171,7 +188,7 @@ export function createMap(container) {
           .addTo(groups.site);
         const rows = coords.slice(1).map(([lon, lat], i) => [coords[i][0], coords[i][1], lon, lat, ROUTE_UPSTREAM_KM2]);
         routeLayer = createFlowLayer({
-          colour: cssVar("--channel"), reducedMotion, arrowPx: 7, minArrowPx: 10, lineAlpha: 1, widthScale: 1.4,
+          colour: cssVar("--channel"), reducedMotion, arrowPx: 4, lineAlpha: 1, widthScale: 1,
           pane: "routePane", zIndex: 460,
         }).addTo(map);
         routeLayer.setData(rows);
@@ -190,7 +207,9 @@ export function createMap(container) {
       const options = { maxZoom: SITE_ZOOM, ...clearOfPanels(SITE_PADDING) };
       if (reducedMotion) map.fitBounds(bounds, options);
       else map.flyToBounds(bounds, { ...options, duration: 0.8 });
-      markers.get(hotspot.rank)?.openPopup();
+      // No automatic popup here: the site bar already names the site, and on short
+      // screens the popup would cover it. Tapping the marker still opens it.
+      map.closePopup();
     },
 
     showHotspots(hotspots, subtitle, onSelect) {
@@ -207,7 +226,7 @@ export function createMap(container) {
           title: `${hotspot.rank}. ${hotspot.place}`,
           keyboard: true,
         })
-          .bindPopup(() => hotspotPopup(hotspot, subtitle), { maxWidth: 320 })
+          .bindPopup(() => hotspotPopup(hotspot, subtitle), { maxWidth: 320, autoPanPaddingTopLeft: POPUP_PAD_TOP_LEFT })
           .addTo(groups.hotspots);
         if (onSelect) marker.on("click", () => onSelect(hotspot));
         markers.set(hotspot.rank, marker);
@@ -218,7 +237,7 @@ export function createMap(container) {
       const target = [hotspot.lat, hotspot.lon];
       if (reducedMotion) map.setView(target, HOTSPOT_ZOOM);
       else map.flyTo(target, HOTSPOT_ZOOM, { duration: 0.8 });
-      markers.get(hotspot.rank)?.openPopup();
+      openPopupClear(map, markers.get(hotspot.rank), !reducedMotion);
     },
   };
 }

@@ -23,3 +23,20 @@ export function phaseFor(index) {
 export function lineWidth(upstreamKm2) {
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, MIN_WIDTH + Math.log10(Math.max(upstreamKm2, 1))));
 }
+
+const BASE_ZOOM = 13;
+const GROWTH_PER_ZOOM = 1.4;
+const MAX_SCALE = 3.5;
+const MIN_ARROW_SEGMENT_PX = 14;
+const MAX_ARROWS_PER_SEGMENT = 6;
+
+/** Size multiplier for lines and arrows: 1 at city scale, larger at street level. */
+export function zoomScale(zoom) {
+  return Math.min(MAX_SCALE, Math.max(1, GROWTH_PER_ZOOM ** (zoom - BASE_ZOOM)));
+}
+
+/** Arrows to draw on a segment lengthPx long on screen, one per spacingPx. */
+export function arrowCount(lengthPx, spacingPx) {
+  if (lengthPx < MIN_ARROW_SEGMENT_PX) return 0;
+  return Math.min(MAX_ARROWS_PER_SEGMENT, Math.max(1, Math.floor(lengthPx / spacingPx)));
+}
