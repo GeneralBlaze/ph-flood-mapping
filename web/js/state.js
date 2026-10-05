@@ -36,7 +36,7 @@ export function readState(search, manifest) {
     boundary: params.get("boundary") !== "0",
     drainage: params.get("drainage") === "1",
     hand: params.get("hand") === "1",
-    site: layer === "suspects" ? parseSite(params.get("site")) : null,
+    site: layer !== "none" ? parseSite(params.get("site")) : null,
   };
 }
 

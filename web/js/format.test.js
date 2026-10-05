@@ -90,9 +90,10 @@ test("keyFigure for suspects counts sites", () => {
   assert.match(figure.caption, /should drain/);
 });
 
-test("readState reads a site only for the suspects layer", () => {
+test("readState reads a site for any flood layer but not for 'none'", () => {
   assert.equal(readState("?site=2", withSuspects).site, 2);
-  assert.equal(readState("?site=2&layer=event", withSuspects).site, null);
+  assert.equal(readState("?site=2&layer=event", withSuspects).site, 2);
+  assert.equal(readState("?site=2&layer=none", withSuspects).site, null);
   assert.equal(readState("?site=abc", withSuspects).site, null);
 });
 

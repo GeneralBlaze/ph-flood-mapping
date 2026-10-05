@@ -37,7 +37,12 @@ function sceneBounds(features) {
   return [[west, south], [east, north]];
 }
 
-function style({ view3d, dataRoot, area, route, buildingsUrl, colours }) {
+// Leaflet bounds [[south, west], [north, east]] -> MapLibre image corners, clockwise from top-left
+function corners([[south, west], [north, east]]) {
+  return [[west, north], [east, north], [east, south], [west, south]];
+}
+
+function style({ view3d, dataRoot, area, route, buildingsUrl, overlay, colours }) {
   const raster = (url) => ({ type: "raster", tiles: [url], tileSize: 256, maxzoom: 19 });
   return {
     version: 8,
@@ -56,12 +61,14 @@ function style({ view3d, dataRoot, area, route, buildingsUrl, colours }) {
       },
       area: { type: "geojson", data: collection(area ? [area] : []) },
       route: { type: "geojson", data: collection(route ? [route] : []), lineMetrics: true },
-      buildings: { type: "geojson", data: buildingsUrl },
+      buildings: { type: "geojson", data: buildingsUrl ?? collection([]) },
+      ...(overlay ? { flood: { type: "image", url: overlay.url, coordinates: corners(overlay.bounds) } } : {}),
     },
     layers: [
       { id: "imagery", type: "raster", source: "imagery" },
       { id: "roads", type: "raster", source: "roads" },
       { id: "places", type: "raster", source: "places" },
+      ...(overlay ? [{ id: "flood", type: "raster", source: "flood", paint: { "raster-opacity": 0.5, "raster-resampling": "nearest" } }] : []),
       { id: "area", type: "fill", source: "area", paint: { "fill-color": colours.signal, "fill-opacity": 0.4 } },
       { id: "area-edge", type: "line", source: "area", paint: { "line-color": colours.signal, "line-width": 2 } },
       {
@@ -91,11 +98,19 @@ function style({ view3d, dataRoot, area, route, buildingsUrl, colours }) {
 }
 
 /** Opens the 3D scene in container; returns a function that closes it. */
-export async function open3d({ container, view3d, dataRoot, hotspot, area, route, colours, reducedMotion }) {
+export async function open3d({ container, view3d, dataRoot, hotspot, area, route, overlay, withBuildings, colours, reducedMotion }) {
   const maplibre = await loadLibrary();
   const map = new maplibre.Map({
     container,
-    style: style({ view3d, dataRoot, area, route, colours, buildingsUrl: absolute(`${dataRoot}${view3d.buildings}/${hotspot.rank}.geojson`) }),
+    style: style({
+      view3d,
+      dataRoot,
+      area,
+      route,
+      colours,
+      overlay: overlay ? { ...overlay, url: absolute(overlay.url) } : null,
+      buildingsUrl: withBuildings ? absolute(`${dataRoot}${view3d.buildings}/${hotspot.rank}.geojson`) : null,
+    }),
     center: [hotspot.lon, hotspot.lat],
     zoom: 16,
     pitch: PITCH,

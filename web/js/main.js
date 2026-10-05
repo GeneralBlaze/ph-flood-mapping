@@ -6,6 +6,7 @@ import { defaultLayer, isLayerAvailable, readState, writeState } from "./state.j
 import { open3d } from "./view3d.js";
 
 const DATA_ROOT = "data/";
+const SITE_OVERLAY_OPACITY = 0.45; // at street zoom the imagery under the flood shading must stay visible
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const cache = new Map();
 
@@ -61,6 +62,14 @@ function layerData(lga, layer) {
   return null;
 }
 
+// Show only the key items that this site view actually draws
+function renderSiteKey({ area, route }) {
+  $("key-area").hidden = !area;
+  $("key-route").hidden = !route;
+  $("key-buildings").hidden = !route;
+  $("site-key").hidden = !area && !route;
+}
+
 function renderSiteReport(hotspot) {
   const story = hotspot?.story;
   $("site-report").hidden = !story?.length;
@@ -84,8 +93,11 @@ function setup3d(getSite) {
     dialog.hidden = false;
     $("view3d-title").textContent = `3D view · ${site.hotspot.rank}. ${site.hotspot.place}`;
     $("view3d-close").focus();
+    dialog.querySelectorAll("[data-for]").forEach((li) => {
+      li.hidden = li.dataset.for !== (site.isSuspect ? "suspect" : "layer");
+    });
     try {
-      const areas = await fetchJson(site.lga.suspects.areas);
+      const areas = site.isSuspect ? await fetchJson(site.lga.suspects.areas) : { features: [] };
       close = await open3d({
         container: $("view3d-map"),
         view3d: site.lga.view3d,
@@ -93,6 +105,8 @@ function setup3d(getSite) {
         hotspot: site.hotspot,
         area: areas.features.find((f) => f.properties.rank === site.hotspot.rank) ?? null,
         route: site.route,
+        overlay: site.isSuspect ? null : site.overlay,
+        withBuildings: site.isSuspect,
         colours: { signal: cssVar("--signal"), channel: cssVar("--channel"), obstruction: cssVar("--obstruction") },
         reducedMotion: reducedMotion.matches,
       });
@@ -168,11 +182,11 @@ async function start() {
     if (state.site) map.setBasemap(kind);
   };
 
-  async function renderSite(lga, hotspots) {
+  async function renderSite(lga, hotspots, data) {
     const hotspot = state.site ? hotspots.find((h) => h.rank === state.site) : null;
     $("site-bar").hidden = !hotspot;
     renderSiteReport(hotspot);
-    $("site-3d").hidden = !(hotspot && lga.view3d);
+    $("site-3d").hidden = !(hotspot && lga.view3d);  // terrain exists for analysed LGAs; any point can use it
     if (!hotspot) {
       currentSite = null;
       focusedSite = null;
@@ -184,12 +198,21 @@ async function start() {
     $("site-name").textContent = hotspot.place;
     $("site-nearby").hidden = !hotspot.nearby;
     $("site-nearby").textContent = hotspot.nearby ? `Near ${hotspot.nearby}` : "";
+    // Drainage routes and route buildings exist only for priority sites
+    const suspects = state.layer === "suspects" ? lga.suspects : null;
     const [routes, obstructions] = await Promise.all([
-      lga.suspects.routes ? fetchJson(lga.suspects.routes) : Promise.resolve(null),
-      lga.suspects.obstructions ? fetchJson(lga.suspects.obstructions) : Promise.resolve(null),
+      suspects?.routes ? fetchJson(suspects.routes) : Promise.resolve(null),
+      suspects?.obstructions ? fetchJson(suspects.obstructions) : Promise.resolve(null),
     ]);
     const route = routes?.features.find((f) => f.properties.rank === hotspot.rank) ?? null;
-    currentSite = { lga, hotspot, route };
+    renderSiteKey({ area: Boolean(suspects), route: Boolean(route) });
+    currentSite = {
+      lga,
+      hotspot,
+      route,
+      isSuspect: Boolean(suspects),
+      overlay: data?.overlay ? { url: DATA_ROOT + data.overlay, bounds: data.bounds } : null,
+    };
     const buildings = obstructions
       ? { ...obstructions, features: obstructions.features.filter((f) => f.properties.rank === hotspot.rank) }
       : null;
@@ -224,7 +247,8 @@ async function start() {
     renderTerrainControls($("drainage-toggle"), $("hand-toggle"), $("terrain-legend"), lga, state);
     const terrain = lga.terrain;
     map.showHand(terrain && state.hand ? DATA_ROOT + terrain.hand_overlay : null, terrain?.hand_bounds);
-    map.showOverlay(data?.overlay ? DATA_ROOT + data.overlay : null, data?.bounds, data?.alt, data?.overlayOpacity);
+    const overlayOpacity = state.site ? Math.min(data?.overlayOpacity ?? 1, SITE_OVERLAY_OPACITY) : data?.overlayOpacity;
+    map.showOverlay(data?.overlay ? DATA_ROOT + data.overlay : null, data?.bounds, data?.alt, overlayOpacity);
     if (refit && (data?.bounds || lga.events[0]?.bounds)) map.fitTo(data?.bounds ?? lga.events[0].bounds);
 
     try {
@@ -242,13 +266,11 @@ async function start() {
       map.showSuspectAreas(suspectAreas);
       map.showLandmarks(landmarks);
       map.showBoundary(boundary, state.boundary);
-      // Suspected sites open the satellite site view; other layers just zoom to the spot.
-      const select = state.layer === "suspects"
-        ? (h) => setState({ site: h.rank })
-        : (h) => map.focusHotspot(h, reducedMotion.matches);
-      map.showHotspots(hotspots, data?.subtitle ?? "", state.layer === "suspects" ? select : null);
+      // Every point, in every layer, opens the zoomed satellite site view
+      const select = (h) => setState({ site: h.rank });
+      map.showHotspots(hotspots, data?.subtitle ?? "", select);
       renderHotspots($("hotspots"), $("hotspots-heading"), hotspots, state.layer, select, lga);
-      await renderSite(lga, state.layer === "suspects" ? hotspots : []);
+      await renderSite(lga, hotspots, data);
     } catch (error) {
       if (token === renderToken) showError(error instanceof Error ? error.message : "Could not load layer data.");
     }

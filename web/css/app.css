@@ -694,6 +694,8 @@ body.sheet-collapsed .sheet-collapse svg {
   animation: sheet-in var(--duration-normal) var(--ease) both;
 }
 
+.site-bar__key[hidden],
+.site-bar__key li[hidden],
 .site-bar[hidden] {
   display: none;
 }
