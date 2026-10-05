@@ -1,4 +1,4 @@
-// Shareable view state lives in the URL: ?lga=<slug>&layer=suspects|standing|frequency|event|none&boundary=0&drainage=1&hand=1&site=<rank>&at=<lat>,<lon>
+// Shareable view state lives in the URL: ?lga=<slug>&layer=suspects|standing|frequency|event|none&boundary=0&drainage=1&hand=1&site=<rank>&at=<lat>,<lon>&area=<lat>,<lon>;…
 
 const LAYERS = ["suspects", "standing", "frequency", "event", "none"];
 
@@ -34,12 +34,22 @@ function parseSpot(value) {
   return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? [lat, lon] : null;
 }
 
+const MAX_AREA_CORNERS = 60;
+
+function parseArea(value) {
+  if (!value) return null;
+  const corners = value.split(";").map(parseSpot);
+  if (corners.length < 3 || corners.length > MAX_AREA_CORNERS || corners.some((c) => c === null)) return null;
+  return corners;
+}
+
 export function readState(search, manifest) {
   const params = new URLSearchParams(search);
   const lga = manifest.lgas.find((l) => l.slug === params.get("lga")) ?? manifest.lgas[0];
   const requested = params.get("layer");
   const layer = isLayerAvailable(lga, requested) ? requested : defaultLayer(lga);
-  const at = parseSpot(params.get("at"));
+  const area = parseArea(params.get("area"));
+  const at = area ? null : parseSpot(params.get("at"));
   return {
     lga: lga.slug,
     layer,
@@ -47,7 +57,8 @@ export function readState(search, manifest) {
     drainage: params.get("drainage") === "1",
     hand: params.get("hand") === "1",
     at,
-    site: !at && layer !== "none" ? parseSite(params.get("site")) : null,
+    area,
+    site: !at && !area && layer !== "none" ? parseSite(params.get("site")) : null,
   };
 }
 
@@ -58,5 +69,6 @@ export function writeState(state) {
   if (state.hand) params.set("hand", "1");
   if (state.site) params.set("site", String(state.site));
   if (state.at) params.set("at", state.at.map((n) => n.toFixed(SPOT_DECIMALS)).join(","));
+  if (state.area) params.set("area", state.area.map((c) => c.map((n) => n.toFixed(SPOT_DECIMALS)).join(",")).join(";"));
   return `?${params.toString()}`;
 }

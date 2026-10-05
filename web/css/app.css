@@ -947,3 +947,90 @@ body.sheet-collapsed .sheet-collapse svg {
   border: 3px solid #fff;
   box-shadow: 0 0 0 2px var(--signal), 0 2px 6px rgba(0, 0, 0, 0.4);
 }
+
+/* Draw a section */
+.map-tool {
+  position: fixed;
+  top: 112px;
+  right: 12px;
+  z-index: var(--z-controls);
+  min-height: var(--touch);
+  padding: 0 var(--space-4);
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule, rgba(0, 0, 0, 0.2));
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.map-tool:hover { background: var(--paper-2); }
+.map-tool:focus-visible { outline: 3px solid var(--channel); outline-offset: 2px; }
+.map-tool[hidden] { display: none; }
+
+.draw-bar {
+  position: fixed;
+  z-index: var(--z-controls);
+  top: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.draw-bar[hidden] { display: none; }
+.draw-bar__hint { margin: 0; }
+
+.draw-bar__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.draw-bar__finish:not(:disabled) {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: #fff;
+}
+
+.map--drawing { cursor: crosshair; }
+
+.area-report { border-left-color: var(--signal); }
+
+.progress {
+  height: 8px;
+  margin: var(--space-2) 0 var(--space-2);
+  background: var(--paper-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress[hidden] { display: none; }
+
+.progress__bar {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--signal);
+  transition: width 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress__bar { transition: none; }
+}
+
+.progress__step {
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+  margin: 0 0 var(--space-3);
+}
+

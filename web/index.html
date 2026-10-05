@@ -54,6 +54,17 @@
       </div>
     </section>
 
+    <button type="button" class="map-tool" id="draw-start">Draw area</button>
+
+    <section class="draw-bar" id="draw-bar" aria-live="polite" hidden>
+      <p class="draw-bar__hint" id="draw-hint">Tap the map to add corners around the area (at least 3).</p>
+      <div class="draw-bar__actions">
+        <button type="button" class="site-bar__back" id="draw-undo" disabled>Undo</button>
+        <button type="button" class="site-bar__back draw-bar__finish" id="draw-finish" disabled>Analyse area</button>
+        <button type="button" class="site-bar__back" id="draw-cancel">Cancel</button>
+      </div>
+    </section>
+
     <section class="view3d" id="view3d" role="dialog" aria-modal="true" aria-labelledby="view3d-title" hidden>
       <div class="view3d__map" id="view3d-map"></div>
       <div class="view3d__bar">
@@ -94,6 +105,22 @@
             From 30 m elevation data (FABDEM, accurate to about 1–2 m in built-up areas) and OpenStreetMap streets.
             Drains, gutters and culverts are not in this data, so confirm on the ground before acting.
           </p>
+        </section>
+
+        <section class="section site-report area-report" id="area-report" aria-labelledby="area-report-heading" hidden>
+          <h2 id="area-report-heading">Drawn area</h2>
+          <div class="progress" id="area-progress" role="progressbar" aria-label="Analysing the drawn area"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+            <span class="progress__bar" id="area-progress-bar"></span>
+          </div>
+          <p class="progress__step" id="area-step" aria-live="polite"></p>
+          <div class="site-report__story" id="area-lines"></div>
+          <ol class="hotspots" id="area-hollows"></ol>
+          <p class="site-report__caveat">
+            Worked out in your browser from the published 30 m terrain and radar layers. Drains and culverts are not
+            in this data; hollows shallower than 0.3 m are not shown.
+          </p>
+          <button type="button" class="site-bar__back" id="area-clear">Clear area</button>
         </section>
 
         <section class="section" aria-labelledby="controls-heading">

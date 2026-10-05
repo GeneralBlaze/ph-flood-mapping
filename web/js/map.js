@@ -1,5 +1,6 @@
 import { el } from "./dom.js";
 import { createFlowLayer } from "./flow-layer.js";
+import { createDrawTool } from "./draw-tool.js";
 import { createLandmarkLayer } from "./landmark-layer.js";
 import { formatHectares } from "./format.js";
 
@@ -108,6 +109,8 @@ export function createMap(container) {
   let routeLayer = null;
   let localFlowLayer = null; // runoff arrows around the open site or tapped spot
   const local = L.layerGroup().addTo(map); // pools and the spot pin
+  const area = L.layerGroup().addTo(map); // drawn area outline and its hollows
+  let areaFlowLayer = null;
 
   return {
     fitTo(bounds) {
@@ -207,6 +210,38 @@ export function createMap(container) {
       routeLayer?.remove();
       routeLayer = null;
       this.clearLocal();
+    },
+
+    createDrawTool(onChange) {
+      return createDrawTool(map, { colour: cssVar("--signal"), onChange });
+    },
+
+    showArea({ ring, hollowsImage, runoff }, reducedMotion) {
+      this.clearArea();
+      L.polygon(ring, { color: cssVar("--signal"), weight: 3, dashArray: "6 6", fill: false, interactive: false }).addTo(area);
+      if (hollowsImage) {
+        L.imageOverlay(hollowsImage.url, hollowsImage.bounds, { opacity: 0.8, alt: "Hollows inside the drawn area" }).addTo(area);
+      }
+      if (runoff?.length) {
+        areaFlowLayer = createFlowLayer({
+          colour: cssVar("--channel"), reducedMotion, arrowPx: 2.5, lineAlpha: 0.9, widthScale: 0.8,
+          pane: "areaFlowPane", zIndex: 452,
+        }).addTo(map);
+        areaFlowLayer.setData(runoff);
+      }
+    },
+
+    clearArea() {
+      area.clearLayers();
+      areaFlowLayer?.remove();
+      areaFlowLayer = null;
+    },
+
+    focusArea(ring, reducedMotion) {
+      const options = { maxZoom: SITE_ZOOM, ...clearOfPanels(SITE_PADDING) };
+      map.closePopup();
+      if (reducedMotion) map.fitBounds(ring, options);
+      else map.flyToBounds(ring, { ...options, duration: 0.8 });
     },
 
     onMapClick(handler) {
