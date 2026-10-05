@@ -52,15 +52,26 @@ def write_frequency_overlay(freq: ee.Image, region: ee.Geometry, out_dir: Path, 
     outputs.download(url, out_dir / "quicklook.png")
 
 
-def write_geotiff(freq: ee.Image, region: ee.Geometry, path: Path) -> None:
+GEOTIFF_SCALES_M = (config.OUTPUT_SCALE_M, 2 * config.OUTPUT_SCALE_M, 4 * config.OUTPUT_SCALE_M)
+
+
+def write_geotiff(freq: ee.Image, region: ee.Geometry, path: Path) -> int:
+    """Archive GeoTIFF at the finest scale under Earth Engine's 50 MB direct-download limit; returns the scale."""
     image = ee.Image.cat(
         freq.select("years_flooded"),
         freq.select("frequency_pct").round().toUint8(),
     )
-    url = image.getDownloadURL(
-        {"region": region, "scale": config.OUTPUT_SCALE_M, "format": "GEO_TIFF", "crs": "EPSG:4326"}
-    )
-    outputs.download(url, path)
+    for scale in GEOTIFF_SCALES_M:
+        try:
+            url = image.getDownloadURL({"region": region, "scale": scale, "format": "GEO_TIFF", "crs": "EPSG:4326"})
+        except ee.EEException as exc:
+            if "request size" not in str(exc).lower() or scale == GEOTIFF_SCALES_M[-1]:
+                raise
+            log.warning("GeoTIFF too large at %d m, retrying coarser: %s", scale, exc)
+            continue
+        outputs.download(url, path)
+        return scale
+    raise AssertionError("unreachable")
 
 
 def run(lga: str, years: list[int]) -> dict:
@@ -86,7 +97,7 @@ def run(lga: str, years: list[int]) -> dict:
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     write_frequency_overlay(freq, region, out_dir, len(years))
-    write_geotiff(freq, region, out_dir / "flood_frequency.tif")
+    summary["geotiff_scale_m"] = write_geotiff(freq, region, out_dir / "flood_frequency.tif")
     outputs.write_lga_boundary(region, out_dir / "lga_boundary.geojson")
 
     polygons_path = out_dir / "repeat_polygons.geojson"

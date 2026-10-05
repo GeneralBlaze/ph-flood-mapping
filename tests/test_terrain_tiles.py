@@ -47,3 +47,27 @@ def test_png_bytes_is_a_valid_rgb_png():
     idat = data[data.index(b"IDAT") + 4: data.index(b"IEND") - 8]
     raw = zlib.decompress(idat)
     assert raw[:4] == b"\x00\xff\x00\x00"  # filter byte 0, then the red pixel
+
+
+def test_fill_gaps_uses_surrounding_ground_not_sea_level():
+    from analysis.terrain_tiles import fill_gaps
+
+    dem = np.array([[30.0, 30.0, 30.0], [30.0, np.nan, 31.0], [np.nan, np.nan, 32.0]])
+
+    filled = fill_gaps(dem)
+
+    assert not np.isnan(filled).any()
+    assert 29.5 <= filled[1, 1] <= 31.5
+    assert filled[2, 0] >= 29.5
+    assert np.isnan(dem[1, 1])  # input untouched
+
+
+def test_sample_tile_extends_edge_heights_outside_the_grid():
+    from analysis.terrain_tiles import sample_tile, tile_bounds
+
+    west, south, east, north = tile_bounds(4250, 4000, 13)
+    grid = {"dem": np.full((4, 4), 25.0), "west": west, "north": north}  # covers only the tile's corner
+
+    heights = sample_tile(grid, 1 / 3600, 4250, 4000, 13)
+
+    assert heights.min() == pytest.approx(25.0)

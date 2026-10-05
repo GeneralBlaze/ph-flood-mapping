@@ -68,12 +68,38 @@ def png_bytes(rgb: np.ndarray) -> bytes:
     return b"\x89PNG\r\n\x1a\n" + _chunk(b"IHDR", header) + _chunk(b"IDAT", zlib.compress(raw, 9)) + _chunk(b"IEND", b"")
 
 
+MAX_FILL_PASSES = 500
+
+
+def fill_gaps(dem: np.ndarray) -> np.ndarray:
+    """Copy of dem with NaN cells (rivers, creeks) filled from neighbouring ground, growing inward.
+
+    Inland rivers sit well above sea level, so drawing them at 0 m would cut deep trenches.
+    """
+    filled = dem.copy()
+    for _ in range(MAX_FILL_PASSES):
+        gaps = np.isnan(filled)
+        if not gaps.any():
+            break
+        padded = np.pad(filled, 1, constant_values=np.nan)
+        rows, cols = filled.shape
+        stack = np.stack([padded[1 + dr: 1 + dr + rows, 1 + dc: 1 + dc + cols]
+                          for dr in (-1, 0, 1) for dc in (-1, 0, 1) if (dr, dc) != (0, 0)])
+        with np.errstate(all="ignore"):
+            neighbour_mean = np.nanmean(stack, axis=0)
+        filled = np.where(gaps & ~np.isnan(neighbour_mean), neighbour_mean, filled)
+    return np.nan_to_num(filled, nan=0.0)
+
+
 def sample_tile(grid: dict, pixel_deg: float, x: int, y: int, zoom: int) -> np.ndarray:
-    """Bilinear heights for each pixel of a tile from a north-up lon/lat grid (NaN and outside -> 0 m)."""
+    """Bilinear heights for each pixel of a tile from a north-up lon/lat grid.
+
+    grid["dem"] must already be gap-free (see fill_gaps). Outside the grid the edge heights are extended,
+    so the terrain never drops to sea level in a cliff at the data's edge."""
     west, _, east, _ = tile_bounds(x, y, zoom)
     cols = west + (np.arange(TILE_PX) + 0.5) / TILE_PX * (east - west)
     rows = np.array([_tile_lat(y + (i + 0.5) / TILE_PX, zoom) for i in range(TILE_PX)])
-    dem = np.nan_to_num(grid["dem"], nan=0.0)
+    dem = grid["dem"]
     fc = (cols - grid["west"]) / pixel_deg - 0.5
     fr = (grid["north"] - rows) / pixel_deg - 0.5
     c0 = np.clip(np.floor(fc).astype(int), 0, dem.shape[1] - 2)
@@ -83,12 +109,11 @@ def sample_tile(grid: dict, pixel_deg: float, x: int, y: int, zoom: int) -> np.n
     R, C = np.meshgrid(r0, c0, indexing="ij")
     top = dem[R, C] * (1 - tc) + dem[R, C + 1] * tc
     bottom = dem[R + 1, C] * (1 - tc) + dem[R + 1, C + 1] * tc
-    heights = top * (1 - tr) + bottom * tr
-    outside = (fc[None, :] < 0) | (fc[None, :] > dem.shape[1] - 1) | (fr[:, None] < 0) | (fr[:, None] > dem.shape[0] - 1)
-    return np.where(outside, 0.0, heights)
+    return top * (1 - tr) + bottom * tr
 
 
 def write_tiles(grid: dict, pixel_deg: float, zooms: range, out_dir: Path) -> int:
+    grid = {**grid, "dem": fill_gaps(grid["dem"])}
     rows, cols = grid["dem"].shape
     box = (grid["west"], grid["north"] - rows * pixel_deg, grid["west"] + cols * pixel_deg, grid["north"])
     count = 0
