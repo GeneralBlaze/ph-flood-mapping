@@ -1,4 +1,4 @@
-// Shareable view state lives in the URL: ?lga=<slug>&layer=suspects|standing|frequency|event|none&boundary=0&drainage=1&hand=1&site=<rank>
+// Shareable view state lives in the URL: ?lga=<slug>&layer=suspects|standing|frequency|event|none&boundary=0&drainage=1&hand=1&site=<rank>&at=<lat>,<lon>
 
 const LAYERS = ["suspects", "standing", "frequency", "event", "none"];
 
@@ -25,18 +25,29 @@ function parseSite(value) {
   return Number.isInteger(rank) && rank > 0 ? rank : null;
 }
 
+const SPOT_DECIMALS = 5; // about a metre
+
+function parseSpot(value) {
+  const parts = (value ?? "").split(",").map(Number);
+  if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [lat, lon] = parts;
+  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? [lat, lon] : null;
+}
+
 export function readState(search, manifest) {
   const params = new URLSearchParams(search);
   const lga = manifest.lgas.find((l) => l.slug === params.get("lga")) ?? manifest.lgas[0];
   const requested = params.get("layer");
   const layer = isLayerAvailable(lga, requested) ? requested : defaultLayer(lga);
+  const at = parseSpot(params.get("at"));
   return {
     lga: lga.slug,
     layer,
     boundary: params.get("boundary") !== "0",
     drainage: params.get("drainage") === "1",
     hand: params.get("hand") === "1",
-    site: layer !== "none" ? parseSite(params.get("site")) : null,
+    at,
+    site: !at && layer !== "none" ? parseSite(params.get("site")) : null,
   };
 }
 
@@ -46,5 +57,6 @@ export function writeState(state) {
   if (state.drainage) params.set("drainage", "1");
   if (state.hand) params.set("hand", "1");
   if (state.site) params.set("site", String(state.site));
+  if (state.at) params.set("at", state.at.map((n) => n.toFixed(SPOT_DECIMALS)).join(","));
   return `?${params.toString()}`;
 }

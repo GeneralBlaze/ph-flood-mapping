@@ -7,7 +7,7 @@ const ARROW_PX = 4;
 const ARROW_SPACING_PX = 70; // one arrow per this much line on screen
 const CASING = "rgba(255, 255, 255, 0.75)"; // light outline keeps lines readable on satellite imagery
 
-export function createFlowLayer({ colour, reducedMotion, arrowPx = ARROW_PX, lineAlpha = 0.55, widthScale = 1, pane = "flowPane", zIndex = 450 }) {
+export function createFlowLayer({ colour, reducedMotion, arrowPx = ARROW_PX, lineAlpha = 0.55, widthScale = 1, pane = "flowPane", zIndex = 450, casing = true }) {
   let map = null;
   let canvas = null;
   let segments = [];
@@ -40,7 +40,8 @@ export function createFlowLayer({ colour, reducedMotion, arrowPx = ARROW_PX, lin
     });
     ctx.lineCap = "round";
     // Casing first, then lines on top, so neighbouring segments don't paint over each other's outline
-    for (const [style, extra, alpha] of [[CASING, 2.5, 1], [colour, 0, lineAlpha]]) {
+    const passes = casing ? [[CASING, 2.5, 1], [colour, 0, lineAlpha]] : [[colour, 0, lineAlpha]];
+    for (const [style, extra, alpha] of passes) {
       ctx.strokeStyle = style;
       ctx.globalAlpha = alpha;
       for (const { a, b, upa } of visible) {
@@ -71,9 +72,11 @@ export function createFlowLayer({ colour, reducedMotion, arrowPx = ARROW_PX, lin
       ctx.lineTo(-size, size * 0.8);
       ctx.closePath();
       ctx.globalAlpha = reducedMotion ? 0.95 : arrow.alpha;
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = CASING;
-      ctx.stroke();
+      if (casing) {
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = CASING;
+        ctx.stroke();
+      }
       ctx.fillStyle = colour;
       ctx.fill();
       ctx.restore();

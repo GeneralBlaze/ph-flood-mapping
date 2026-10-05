@@ -106,6 +106,8 @@ export function createMap(container) {
   const markers = new Map();
   let flowLayer = null;
   let routeLayer = null;
+  let localFlowLayer = null; // runoff arrows around the open site or tapped spot
+  const local = L.layerGroup().addTo(map); // pools and the spot pin
 
   return {
     fitTo(bounds) {
@@ -204,6 +206,44 @@ export function createMap(container) {
       groups.site.clearLayers();
       routeLayer?.remove();
       routeLayer = null;
+      this.clearLocal();
+    },
+
+    onMapClick(handler) {
+      map.on("click", (e) => handler(e.latlng.lat, e.latlng.lng));
+    },
+
+    showSpot(lat, lon) {
+      L.marker([lat, lon], {
+        icon: L.divIcon({ className: "", html: '<span class="spot-pin" aria-hidden="true"></span>', iconSize: [22, 22] }),
+        title: "Selected spot",
+        keyboard: false,
+        interactive: false,
+      }).addTo(local);
+    },
+
+    showLocal({ segments, pools }, reducedMotion) {
+      if (pools) L.imageOverlay(pools.url, pools.bounds, { opacity: 0.75, alt: "Hollows where water ponds" }).addTo(local);
+      localFlowLayer?.remove();
+      localFlowLayer = createFlowLayer({
+        colour: cssVar("--channel"), reducedMotion, arrowPx: 2.5, lineAlpha: 0.8, widthScale: 0.7,
+        pane: "localFlowPane", zIndex: 455, casing: false,
+      }).addTo(map);
+      localFlowLayer.setData(segments);
+    },
+
+    clearLocal() {
+      local.clearLayers();
+      localFlowLayer?.remove();
+      localFlowLayer = null;
+    },
+
+    focusSpot(lat, lon, reducedMotion) {
+      const bounds = L.latLng(lat, lon).toBounds(350);
+      const options = { maxZoom: SITE_ZOOM, ...clearOfPanels(SITE_PADDING) };
+      map.closePopup();
+      if (reducedMotion) map.fitBounds(bounds, options);
+      else map.flyToBounds(bounds, { ...options, duration: 0.8 });
     },
 
     focusSite(hotspot, route, reducedMotion) {

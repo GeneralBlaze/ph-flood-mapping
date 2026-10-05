@@ -38,17 +38,17 @@ test("keyFigure for frequency sums hectares at or above the repeat threshold", (
 });
 
 test("readState defaults to first LGA and the best available layer", () => {
-  assert.deepEqual(readState("", manifest), { lga: "obio-akpor", layer: "event", boundary: true, drainage: false, hand: false, site: null });
-  assert.deepEqual(readState("?lga=port-harcourt", manifest), { lga: "port-harcourt", layer: "frequency", boundary: true, drainage: false, hand: false, site: null });
+  assert.deepEqual(readState("", manifest), { lga: "obio-akpor", layer: "event", boundary: true, drainage: false, hand: false, at: null, site: null });
+  assert.deepEqual(readState("?lga=port-harcourt", manifest), { lga: "port-harcourt", layer: "frequency", boundary: true, drainage: false, hand: false, at: null, site: null });
 });
 
 test("readState rejects unknown or unavailable values", () => {
-  assert.deepEqual(readState("?lga=nowhere&layer=frequency", manifest), { lga: "obio-akpor", layer: "event", boundary: true, drainage: false, hand: false, site: null });
+  assert.deepEqual(readState("?lga=nowhere&layer=frequency", manifest), { lga: "obio-akpor", layer: "event", boundary: true, drainage: false, hand: false, at: null, site: null });
   assert.deepEqual(readState("?layer=<script>", manifest).layer, "event");
 });
 
 test("readState honours layer=none and boundary=0", () => {
-  assert.deepEqual(readState("?layer=none&boundary=0", manifest), { lga: "obio-akpor", layer: "none", boundary: false, drainage: false, hand: false, site: null });
+  assert.deepEqual(readState("?layer=none&boundary=0", manifest), { lga: "obio-akpor", layer: "none", boundary: false, drainage: false, hand: false, at: null, site: null });
 });
 
 test("writeState produces a stable query string", () => {
@@ -124,4 +124,16 @@ test("keyFigure for standing water reports hectares still wet on the later date"
 test("readState defaults to standing water when it is the only layer", () => {
   assert.equal(readState("", withStanding).layer, "standing");
   assert.equal(readState("?layer=standing", withStanding).layer, "standing");
+});
+
+test("readState reads a tapped spot and rejects nonsense", () => {
+  assert.deepEqual(readState("?at=4.94167,7.01140", withSuspects).at, [4.94167, 7.0114]);
+  assert.equal(readState("?at=abc,7", withSuspects).at, null);
+  assert.equal(readState("?at=95,7", withSuspects).at, null);
+  assert.equal(readState("?at=4.9,7&site=2", withSuspects).site, null); // a spot replaces a site
+});
+
+test("writeState rounds a tapped spot to about a metre", () => {
+  const query = writeState({ lga: "obio-akpor", layer: "suspects", boundary: true, drainage: false, hand: false, site: null, at: [4.941674, 7.011402] });
+  assert.equal(query, "?lga=obio-akpor&layer=suspects&at=4.94167%2C7.01140");
 });

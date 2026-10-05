@@ -936,3 +936,14 @@ body.sheet-collapsed .sheet-collapse svg {
     flex-direction: column;
   }
 }
+
+/* Tapped spot */
+.spot-pin {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--signal);
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 2px var(--signal), 0 2px 6px rgba(0, 0, 0, 0.4);
+}

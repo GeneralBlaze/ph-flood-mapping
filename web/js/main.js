@@ -3,9 +3,13 @@ import { formatDate } from "./format.js";
 import { createMap } from "./map.js";
 import { renderFigure, renderHotspots, renderLayerControls, renderLgaSelect, renderTerrainControls } from "./panel.js";
 import { defaultLayer, isLayerAvailable, readState, writeState } from "./state.js";
+import { nearbyLandmarks } from "./local-terrain.js";
+import { analyseSpot } from "./spot-terrain.js";
 import { open3d } from "./view3d.js";
 
 const DATA_ROOT = "data/";
+const NEARBY_MAX_M = 600;
+const NEARBY_LIMIT = 3;
 const SITE_OVERLAY_OPACITY = 0.45; // at street zoom the imagery under the flood shading must stay visible
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const cache = new Map();
@@ -70,12 +74,16 @@ function renderSiteKey({ area, route }) {
   $("site-key").hidden = !area && !route;
 }
 
-function renderSiteReport(hotspot) {
-  const story = hotspot?.story;
-  $("site-report").hidden = !story?.length;
-  if (!story?.length) return;
-  $("site-report-place").textContent = `${hotspot.rank}. ${hotspot.place}`;
-  $("site-report-story").replaceChildren(...story.map((line) => el("p", { text: line })));
+const siteTitle = (site) => (site.rank ? `${site.rank}. ${site.place}` : site.place);
+
+// Drainage assessment (priority sites) plus the local-ground sentence (any site or spot)
+function renderSiteReport(site, groundSentence) {
+  const lines = [...(site?.story ?? [])];
+  if (groundSentence) lines.push(groundSentence);
+  $("site-report").hidden = !lines.length;
+  if (!lines.length) return;
+  $("site-report-place").textContent = siteTitle(site);
+  $("site-report-story").replaceChildren(...lines.map((line) => el("p", { text: line })));
   $("sheet-content").scrollTop = 0;
 }
 
@@ -91,7 +99,7 @@ function setup3d(getSite) {
     const site = getSite();
     if (!site) return;
     dialog.hidden = false;
-    $("view3d-title").textContent = `3D view · ${site.hotspot.rank}. ${site.hotspot.place}`;
+    $("view3d-title").textContent = `3D view · ${siteTitle(site.hotspot)}`;
     $("view3d-close").focus();
     dialog.querySelectorAll("[data-for]").forEach((li) => {
       li.hidden = li.dataset.for !== (site.isSuspect ? "suspect" : "layer");
@@ -174,17 +182,39 @@ async function start() {
   let focusedSite = null; // avoids re-flying to the same site on unrelated re-renders
   let basemap = "satellite";
   let currentSite = null; // { lga, hotspot, route } while a site is open
+  let ground = { key: null, sentence: null }; // local-terrain sentence for the open site or spot
 
   const setBasemap = (kind) => {
     basemap = kind;
     $("basemap-satellite").setAttribute("aria-pressed", String(kind === "satellite"));
     $("basemap-street").setAttribute("aria-pressed", String(kind === "street"));
-    if (state.site) map.setBasemap(kind);
+    if (state.site || state.at) map.setBasemap(kind);
   };
 
-  async function renderSite(lga, hotspots, data) {
-    const hotspot = state.site ? hotspots.find((h) => h.rank === state.site) : null;
+  // A tapped spot behaves like a site without analysis of its own
+  function spotSite(landmarks) {
+    const [lat, lon] = state.at;
+    return { rank: null, lat, lon, place: `Selected spot (${lat.toFixed(4)}, ${lon.toFixed(4)})`,
+             nearby: nearbyLandmarks(lat, lon, landmarks, NEARBY_MAX_M, NEARBY_LIMIT) };
+  }
+
+  async function showGround(lga, site, key, token) {
+    if (!lga.view3d) return;
+    try {
+      const local = await analyseSpot(lga.view3d, DATA_ROOT, site.lat, site.lon);
+      if (token !== renderToken) return;
+      map.showLocal(local, reducedMotion.matches);
+      ground = { key, sentence: `Ground at this spot: ${local.sentence}` };
+      renderSiteReport(site, ground.sentence);
+    } catch {
+      // Outside the terrain tiles (beyond the analysed LGAs): the satellite view still works
+    }
+  }
+
+  async function renderSite(lga, hotspots, data, landmarks, token) {
+    const hotspot = state.at ? spotSite(landmarks) : state.site ? hotspots.find((h) => h.rank === state.site) : null;
     $("site-bar").hidden = !hotspot;
+    $("site-rank").hidden = !hotspot?.rank;
     renderSiteReport(hotspot);
     $("site-3d").hidden = !(hotspot && lga.view3d);  // terrain exists for analysed LGAs; any point can use it
     if (!hotspot) {
@@ -194,12 +224,12 @@ async function start() {
       map.setBasemap("street");
       return;
     }
-    $("site-rank").textContent = String(hotspot.rank);
+    $("site-rank").textContent = hotspot.rank ? String(hotspot.rank) : "";
     $("site-name").textContent = hotspot.place;
     $("site-nearby").hidden = !hotspot.nearby;
     $("site-nearby").textContent = hotspot.nearby ? `Near ${hotspot.nearby}` : "";
     // Drainage routes and route buildings exist only for priority sites
-    const suspects = state.layer === "suspects" ? lga.suspects : null;
+    const suspects = state.layer === "suspects" && hotspot.rank ? lga.suspects : null;
     const [routes, obstructions] = await Promise.all([
       suspects?.routes ? fetchJson(suspects.routes) : Promise.resolve(null),
       suspects?.obstructions ? fetchJson(suspects.obstructions) : Promise.resolve(null),
@@ -218,10 +248,18 @@ async function start() {
       : null;
     map.setBasemap(basemap);
     map.showSite({ route, buildings, reducedMotion: reducedMotion.matches });
-    if (focusedSite !== `${lga.slug}:${hotspot.rank}`) {
-      focusedSite = `${lga.slug}:${hotspot.rank}`;
+    const key = state.at ? `at:${state.at.join(",")}` : `${lga.slug}:${state.layer}:${hotspot.rank}`;
+    if (ground.key === key) renderSiteReport(hotspot, ground.sentence); // unrelated re-render: keep it
+    if (focusedSite === key) return;
+    focusedSite = key;
+    map.clearLocal();
+    if (state.at) {
+      map.showSpot(hotspot.lat, hotspot.lon);
+      map.focusSpot(hotspot.lat, hotspot.lon, reducedMotion.matches);
+    } else {
       map.focusSite(hotspot, route, reducedMotion.matches);
     }
+    await showGround(lga, hotspot, key, token);
   }
 
   const setState = (patch, { refit = false } = {}) => {
@@ -240,14 +278,14 @@ async function start() {
     renderLgaSelect($("lga-select"), manifest, lga.slug, (slug) => {
       const next = manifest.lgas.find((l) => l.slug === slug);
       const layer = isLayerAvailable(next, state.layer) ? state.layer : defaultLayer(next);
-      setState({ lga: slug, layer, site: null }, { refit: true });
+      setState({ lga: slug, layer, site: null, at: null }, { refit: true });
     });
-    renderLayerControls($("layer-controls"), lga, state.layer, (layer) => setState({ layer, site: null }));
+    renderLayerControls($("layer-controls"), lga, state.layer, (layer) => setState({ layer, site: null, at: state.at }));
     renderFigure($("figure"), $("legend"), lga, state.layer);
     renderTerrainControls($("drainage-toggle"), $("hand-toggle"), $("terrain-legend"), lga, state);
     const terrain = lga.terrain;
     map.showHand(terrain && state.hand ? DATA_ROOT + terrain.hand_overlay : null, terrain?.hand_bounds);
-    const overlayOpacity = state.site ? Math.min(data?.overlayOpacity ?? 1, SITE_OVERLAY_OPACITY) : data?.overlayOpacity;
+    const overlayOpacity = state.site || state.at ? Math.min(data?.overlayOpacity ?? 1, SITE_OVERLAY_OPACITY) : data?.overlayOpacity;
     map.showOverlay(data?.overlay ? DATA_ROOT + data.overlay : null, data?.bounds, data?.alt, overlayOpacity);
     if (refit && (data?.bounds || lga.events[0]?.bounds)) map.fitTo(data?.bounds ?? lga.events[0].bounds);
 
@@ -267,17 +305,22 @@ async function start() {
       map.showLandmarks(landmarks);
       map.showBoundary(boundary, state.boundary);
       // Every point, in every layer, opens the zoomed satellite site view
-      const select = (h) => setState({ site: h.rank });
+      const select = (h) => setState({ site: h.rank, at: null });
       map.showHotspots(hotspots, data?.subtitle ?? "", select);
       renderHotspots($("hotspots"), $("hotspots-heading"), hotspots, state.layer, select, lga);
-      await renderSite(lga, hotspots, data);
+      await renderSite(lga, hotspots, data, landmarks, token);
     } catch (error) {
       if (token === renderToken) showError(error instanceof Error ? error.message : "Could not load layer data.");
     }
   }
 
   setup3d(() => currentSite);
-  $("site-back").addEventListener("click", () => setState({ site: null }, { refit: true }));
+  $("site-back").addEventListener("click", () => setState({ site: null, at: null }, { refit: true }));
+  // Tap anywhere on the map: zoom into the satellite view of that spot
+  map.onMapClick((lat, lon) => {
+    if (!$("view3d").hidden) return;
+    setState({ site: null, at: [lat, lon] });
+  });
   $("basemap-satellite").addEventListener("click", () => setBasemap("satellite"));
   $("basemap-street").addEventListener("click", () => setBasemap("street"));
   $("boundary-toggle").checked = state.boundary;
