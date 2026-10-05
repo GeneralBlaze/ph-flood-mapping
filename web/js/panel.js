@@ -197,6 +197,7 @@ export function renderHotspots(list, heading, hotspots, layer, onSelect, lga) {
             el("span", { class: "hotspot__rank", text: String(h.rank) }),
             el("span", { class: "hotspot__place" }, [
               h.place,
+              ...(h.nearby ? [el("span", { class: "hotspot__nearby", text: `Near ${h.nearby}` })] : []),
               ...waterFlag(h.water_now, lga?.standing),
             ]),
             el("span", { class: "hotspot__area", text: h.kind ? KIND_LABELS[h.kind] : formatHectares(h.area_ha) }),

@@ -1,5 +1,6 @@
 import { el } from "./dom.js";
 import { createFlowLayer } from "./flow-layer.js";
+import { createLandmarkLayer } from "./landmark-layer.js";
 import { formatHectares } from "./format.js";
 
 const PH_CENTRE = [4.82, 7.0];
@@ -37,6 +38,9 @@ function hotspotPopup(hotspot, subtitle) {
         text: "An indication, not a confirmed blockage. The water may instead be a pond, a construction site or paving that appears as water on radar. Verify on site.",
       })
     );
+  }
+  if (hotspot.nearby) {
+    children.push(el("p", { class: "popup__label", text: "Landmarks nearby" }), el("p", { text: hotspot.nearby }));
   }
   children.push(el("p", { text: `${hotspot.lat.toFixed(4)}, ${hotspot.lon.toFixed(4)}` }));
   return el("div", { class: "popup" }, children);
@@ -77,6 +81,7 @@ export function createMap(container) {
   const setOverview = () => container.classList.toggle("map--overview", map.getZoom() <= OVERVIEW_MAX_ZOOM);
   map.on("zoomend", setOverview);
   setOverview();
+  const landmarks = createLandmarkLayer(map);
 
   // Dark mode darkens the street tiles with a CSS filter (see .basemap-tiles in app.css).
   const streetLayer = L.tileLayer(BASEMAP_URL, { attribution: BASEMAP_ATTRIBUTION, maxZoom: 19, className: "basemap-tiles" }).addTo(map);
@@ -231,6 +236,10 @@ export function createMap(container) {
         if (onSelect) marker.on("click", () => onSelect(hotspot));
         markers.set(hotspot.rank, marker);
       }
+    },
+
+    showLandmarks(rows) {
+      landmarks.setData(rows);
     },
 
     focusHotspot(hotspot, reducedMotion) {

@@ -179,3 +179,15 @@ def test_site_status_is_merged_into_suspects():
 
     assert merged == [{"rank": 1, "place": "A", "water_now": None}, {"rank": 2, "place": "B", "water_now": "standing"}]
     assert "water_now" not in suspects[0]
+
+
+def test_landmarks_are_published_and_hotspots_get_nearby_line(stage2_dir, tmp_path):
+    payload = {"elements": [{"type": "node", "lat": 4.9009, "lon": 7.0, "tags": {"name": "Eneka Market", "amenity": "marketplace"}}]}
+    _write(stage2_dir.parent / "osm_landmarks.json", payload)
+    web_data = tmp_path / "web" / "data"
+
+    entry = build_lga_entry(stage2_dir.parent, "Obio/Akpor", web_data)
+
+    assert json.loads((web_data / entry["landmarks"]).read_text()) == [[4.9009, 7.0, "market", "Eneka Market"]]
+    hotspot = json.loads((web_data / entry["events"][0]["hotspots"]).read_text())[0]
+    assert hotspot["nearby"] == "Eneka Market, 100 m north"

@@ -120,6 +120,8 @@ async function start() {
     }
     $("site-rank").textContent = String(hotspot.rank);
     $("site-name").textContent = hotspot.place;
+    $("site-nearby").hidden = !hotspot.nearby;
+    $("site-nearby").textContent = hotspot.nearby ? `Near ${hotspot.nearby}` : "";
     const [routes, obstructions] = await Promise.all([
       lga.suspects.routes ? fetchJson(lga.suspects.routes) : Promise.resolve(null),
       lga.suspects.obstructions ? fetchJson(lga.suspects.obstructions) : Promise.resolve(null),
@@ -163,17 +165,19 @@ async function start() {
     if (refit && (data?.bounds || lga.events[0]?.bounds)) map.fitTo(data?.bounds ?? lga.events[0].bounds);
 
     try {
-      const [boundary, hotspots, drainage, suspectAreas] = await Promise.all([
+      const [boundary, hotspots, drainage, suspectAreas, landmarks] = await Promise.all([
         fetchJson(lga.boundary),
         data ? fetchJson(data.hotspots) : Promise.resolve([]),
         terrain && state.drainage ? fetchJson(terrain.flow ?? terrain.drainage) : Promise.resolve(null),
         data?.areas ? fetchJson(data.areas) : Promise.resolve(null),
+        lga.landmarks ? fetchJson(lga.landmarks).catch(() => []) : Promise.resolve([]),
       ]);
       if (token !== renderToken) return;
       // Directed flow paths when available; older data falls back to channel outlines.
       map.showFlow(terrain?.flow && drainage ? drainage : null);
       map.showDrainage(terrain?.flow ? null : drainage);
       map.showSuspectAreas(suspectAreas);
+      map.showLandmarks(landmarks);
       map.showBoundary(boundary, state.boundary);
       // Suspected sites open the satellite site view; other layers just zoom to the spot.
       const select = state.layer === "suspects"

@@ -816,3 +816,41 @@ body.sheet-collapsed .sheet-collapse svg {
     transform: none;
   }
 }
+
+/* Landmarks (street zoom) */
+.landmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transform: translate(-4px, -50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.landmark__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--paper);
+}
+
+.landmark__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  text-shadow: 0 0 3px var(--paper), 0 0 3px var(--paper), 0 0 2px var(--paper);
+}
+
+.hotspot__nearby {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-small);
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+.site-bar__nearby {
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}

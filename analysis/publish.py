@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from analysis import config
+from analysis.landmarks import describe_nearby, nearby_landmarks, parse_landmarks
 from analysis.run_stage2 import DATA_DIR, slugify
 
 WEB_DATA_DIR = Path(__file__).resolve().parent.parent / "web" / "data"
@@ -24,6 +25,8 @@ DISPLAY_NAMES = {"Port-Harcourt": "Port Harcourt"}
 HOTSPOT_FIELDS = ("area_ha", "lat", "lon", "place")
 SUSPECT_FIELDS = ("rank", "kind", "place", "area_ha", "mean_years", "anomaly_m", "buildings", "built_frac",
                   "lat", "lon", "reasons", "crossing_road", "path_buildings")
+NEARBY_MAX_M = 600
+NEARBY_LIMIT = 3
 log = logging.getLogger(__name__)
 
 
@@ -202,6 +205,35 @@ def _rank_features(collection: dict[str, Any]) -> dict[str, Any]:
     ]}
 
 
+def _publish_landmarks(lga_dir: Path, slug: str, web_data: Path) -> tuple[list[dict[str, Any]], str | None]:
+    """Compact [[lat, lon, kind, name], ...] for the map; also returns the parsed list."""
+    cache = lga_dir / "osm_landmarks.json"
+    if not cache.exists():
+        return [], None
+    landmarks = parse_landmarks(_read(cache))
+    path = f"{slug}/landmarks.json"
+    _write_json(web_data / path, [[round(m["lat"], COORD_DECIMALS), round(m["lon"], COORD_DECIMALS), m["kind"], m["name"]]
+                                  for m in landmarks])
+    return landmarks, path
+
+
+def _add_nearby(path: Path, landmarks: list[dict[str, Any]]) -> None:
+    """Rewrite a published hotspot list with a 'nearby' landmark line on each entry that has one."""
+    rows = []
+    for row in _read(path):
+        line = describe_nearby(nearby_landmarks(row["lat"], row["lon"], landmarks, NEARBY_MAX_M, NEARBY_LIMIT))
+        rows.append({**row, "nearby": line} if line else row)
+    _write_json(path, rows)
+
+
+def _hotspot_files(entry: dict[str, Any]) -> list[str]:
+    files = [e["hotspots"] for e in entry["events"]]
+    files += [entry[k]["hotspots"] for k in ("frequency", "standing") if entry.get(k)]
+    if entry.get("suspects"):
+        files.append(entry["suspects"]["list"])
+    return files
+
+
 def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
     slug = lga_dir.name
     stage2 = _latest(lga_dir, "stage2_*")
@@ -214,7 +246,7 @@ def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
 
     boundary_source = (stage3 or stage2 or standing) / "lga_boundary.geojson"
     _publish_geojson(boundary_source, web_data / slug / "boundary.geojson")
-    return {
+    entry = {
         "slug": slug,
         "name": DISPLAY_NAMES.get(name, name),
         "boundary": f"{slug}/boundary.geojson",
@@ -224,6 +256,10 @@ def build_lga_entry(lga_dir: Path, name: str, web_data: Path) -> dict[str, Any]:
         "suspects": _suspects_entry(stage5, slug, web_data, standing) if stage5 else None,
         "standing": _standing_entry(standing, slug, web_data) if standing else None,
     }
+    landmarks, landmarks_path = _publish_landmarks(lga_dir, slug, web_data)
+    for path in _hotspot_files(entry) if landmarks else []:
+        _add_nearby(web_data / path, landmarks)
+    return {**entry, "landmarks": landmarks_path}
 
 
 def write_manifest(entries: list[dict[str, Any]], web_data: Path) -> Path:
