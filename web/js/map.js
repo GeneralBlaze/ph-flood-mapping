@@ -248,13 +248,20 @@ export function createMap(container) {
       map.on("click", (e) => handler(e.latlng.lat, e.latlng.lng));
     },
 
-    showSpot(lat, lon) {
+    /** Pin for a tapped spot; tapping the pin again calls onDeselect. */
+    showSpot(lat, lon, onDeselect) {
       L.marker([lat, lon], {
         icon: L.divIcon({ className: "", html: '<span class="spot-pin" aria-hidden="true"></span>', iconSize: [22, 22] }),
-        title: "Selected spot",
+        title: "Selected spot: tap to deselect",
+        alt: "Selected spot",
         keyboard: false,
-        interactive: false,
-      }).addTo(local);
+        bubblingMouseEvents: false,
+      })
+        .on("click", (e) => {
+          L.DomEvent.stop(e);
+          onDeselect();
+        })
+        .addTo(local);
     },
 
     // Route from a tapped spot, drawn like a priority site's route; plus the hollow it starts in

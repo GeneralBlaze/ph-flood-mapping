@@ -182,6 +182,7 @@ async function start() {
   let renderToken = 0;
   let focusedSite = null; // avoids re-flying to the same site on unrelated re-renders
   let basemap = "satellite";
+  let keepView = false; // set by deselect: stay at this zoom and imagery
   let currentSite = null; // { lga, hotspot, route } while a site is open
   let ground = { key: null, sentence: null }; // local-terrain sentence for the open site or spot
 
@@ -223,7 +224,8 @@ async function start() {
       currentSite = null;
       focusedSite = null;
       map.clearSite();
-      map.setBasemap(state.area ? basemap : "street");
+      map.setBasemap(state.area || keepView ? basemap : "street");
+      keepView = false;
       return;
     }
     $("site-rank").textContent = hotspot.rank ? String(hotspot.rank) : "";
@@ -256,7 +258,7 @@ async function start() {
     focusedSite = key;
     map.clearLocal();
     if (state.at) {
-      map.showSpot(hotspot.lat, hotspot.lon);
+      map.showSpot(hotspot.lat, hotspot.lon, deselect);
       map.focusSpot(hotspot.lat, hotspot.lon, reducedMotion.matches);
     } else {
       map.focusSite(hotspot, route, reducedMotion.matches);
@@ -356,6 +358,12 @@ async function start() {
     render(refit);
   };
 
+  /** Drops the tapped spot or open site but leaves the map where it is. */
+  function deselect() {
+    keepView = true;
+    setState({ site: null, at: null });
+  }
+
   async function render(refit) {
     const token = ++renderToken;
     const lga = manifest.lgas.find((l) => l.slug === state.lga);
@@ -405,6 +413,12 @@ async function start() {
 
   setup3d(() => currentSite);
   $("site-back").addEventListener("click", () => setState({ site: null, at: null }, { refit: true }));
+  $("site-close").addEventListener("click", deselect);
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !$("view3d").hidden) return; // the 3D dialog handles its own Escape
+    if (drawTool.active) $("draw-cancel").click();
+    else if (state.at || state.site) deselect();
+  });
   // Tap anywhere on the map: zoom into the satellite view of that spot
   map.onMapClick((lat, lon) => {
     if (!$("view3d").hidden || drawTool.active) return; // taps while drawing add corners instead

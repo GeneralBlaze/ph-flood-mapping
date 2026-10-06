@@ -706,6 +706,27 @@ body.sheet-collapsed .sheet-collapse svg {
   gap: var(--space-3);
 }
 
+.site-bar__close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--touch);
+  height: var(--touch);
+  margin: calc(var(--space-2) * -1) calc(var(--space-2) * -1) calc(var(--space-2) * -1) auto;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+.site-bar__close:hover,
+.site-bar__close:focus-visible {
+  color: var(--ink);
+  background: var(--rule);
+}
+
 .site-bar__title {
   margin: 0;
   font-family: var(--font-display);
@@ -946,6 +967,7 @@ body.sheet-collapsed .sheet-collapse svg {
   background: var(--signal);
   border: 3px solid #fff;
   box-shadow: 0 0 0 2px var(--signal), 0 2px 6px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
 }
 
 /* Draw a section */
