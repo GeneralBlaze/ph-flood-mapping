@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from pathlib import Path
 import urllib.parse
 import urllib.request
@@ -16,13 +17,14 @@ OVERPASS_URLS = [
 ]
 PLACE_TYPES = "suburb|neighbourhood|quarter|village|town|hamlet"
 REQUEST_TIMEOUT_S = 90
+MIN_ATTEMPT_S = 5      # not worth trying another mirror with less time than this
 log = logging.getLogger(__name__)
 
 
-def _post_overpass(url: str, query: str) -> dict[str, Any]:
+def _post_overpass(url: str, query: str, timeout_s: float) -> dict[str, Any]:
     data = urllib.parse.urlencode({"data": query}).encode()
     request = urllib.request.Request(url, data=data, headers={"User-Agent": "ph-flood-mapping/0.1"})
-    with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
+    with urllib.request.urlopen(request, timeout=timeout_s) as response:
         return json.load(response)
 
 
@@ -37,12 +39,18 @@ def fetch_places(bbox: tuple[float, float, float, float]) -> list[dict[str, Any]
     return parse_overpass_places(query_overpass(query))
 
 
-def query_overpass(query: str) -> dict[str, Any]:
-    """Run an Overpass QL query, trying each mirror in turn."""
+def query_overpass(query: str, budget_s: float | None = None) -> dict[str, Any]:
+    """Run an Overpass QL query, trying each mirror in turn, within budget_s seconds overall if given."""
     errors = []
+    deadline = None if budget_s is None else time.monotonic() + budget_s
     for url in OVERPASS_URLS:
+        timeout_s = REQUEST_TIMEOUT_S
+        if deadline is not None:
+            timeout_s = min(timeout_s, deadline - time.monotonic())
+            if timeout_s < MIN_ATTEMPT_S:
+                raise RuntimeError("Overpass time budget used up: " + "; ".join(errors))
         try:
-            return _post_overpass(url, query)
+            return _post_overpass(url, query, timeout_s)
         except (OSError, json.JSONDecodeError) as exc:
             errors.append(f"{url}: {exc}")
     raise RuntimeError("All Overpass mirrors failed: " + "; ".join(errors))

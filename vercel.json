@@ -3,6 +3,13 @@
   "buildCommand": null,
   "outputDirectory": "web",
   "cleanUrls": true,
+  "installCommand": "",
+  "functions": {
+    "api/area.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{web,data,tests,design-system,.venv}/**"
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",
@@ -51,6 +58,5 @@
         }
       ]
     }
-  ],
-  "installCommand": ""
+  ]
 }

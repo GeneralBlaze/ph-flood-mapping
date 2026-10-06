@@ -63,6 +63,33 @@ Deployed on Vercel: every push to `main` deploys automatically (the project is
 connected to this repo). `vercel.json` at the repo root serves `web/` with no
 build step and sets the security headers and caching.
 
+### Full analysis of a drawn area (`api/area.py`)
+
+Anyone can draw an area (up to 10 km², inside Rivers State) and run the full
+pipeline on it: radar flood history 2021–2026 and the latest pass, routing on
+FABDEM, Open Buildings on the routes, and OSM streets. It runs as five requests
+(`history`, `latest`, `routes`, `buildings`, `streets`), each well under
+Vercel's 300 s limit; the browser carries each step's output to the next.
+Inside an analysed LGA the history comes from the published yearly stacks;
+elsewhere it is recomputed scene by scene with thresholds set over the area.
+
+```bash
+python -m analysis.dev_server --port 8792   # site + /api/area with your own Earth Engine login
+```
+
+On Vercel it stays hidden until these environment variables are set
+(Settings → Environment Variables, marked Sensitive):
+
+- `EE_SERVICE_ACCOUNT_KEY`: the JSON key of a service account in the Earth
+  Engine project, with the roles *Earth Engine Resource Viewer* and *Service
+  Usage Consumer*. Never commit it.
+- `AREA_TOKEN_SECRET` (optional): signs run tokens; derived from the key if unset.
+
+Limits: 3 runs and 30 step requests per connection per 10 minutes in each
+server instance, and a signed token ties the later steps to the first. Add a
+Vercel Firewall rate-limit rule as the main limit: path `/api/area`, method
+POST, 20 requests per 10 minutes per IP.
+
 ## Setup
 
 ```bash

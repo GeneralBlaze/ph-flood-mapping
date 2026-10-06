@@ -58,7 +58,7 @@ def test_fetch_falls_back_to_next_mirror(monkeypatch):
 
     calls = []
 
-    def fake_post(url, query):
+    def fake_post(url, query, timeout_s):
         calls.append(url)
         if len(calls) == 1:
             raise OSError("504 Gateway Timeout")
@@ -77,10 +77,31 @@ def test_fetch_falls_back_to_next_mirror(monkeypatch):
 def test_fetch_raises_when_all_mirrors_fail(monkeypatch):
     from analysis import places
 
-    def always_fail(url, query):
+    def always_fail(url, query, timeout_s):
         raise OSError("down")
 
     monkeypatch.setattr(places, "_post_overpass", always_fail)
 
     with pytest.raises(RuntimeError, match="All Overpass mirrors failed"):
         places.fetch_places((4.7, 6.9, 4.9, 7.1))
+
+
+def test_query_overpass_stops_trying_mirrors_when_the_time_budget_runs_out(monkeypatch):
+    from analysis import places
+
+    clock = {"now": 0.0}
+    timeouts = []
+
+    def slow_failure(url, query, timeout_s):
+        timeouts.append(timeout_s)
+        clock["now"] += timeout_s
+        raise OSError("timed out")
+
+    monkeypatch.setattr(places, "_post_overpass", slow_failure)
+    monkeypatch.setattr(places.time, "monotonic", lambda: clock["now"])
+
+    import pytest
+    with pytest.raises(RuntimeError, match="time budget"):
+        places.query_overpass("[out:json];", budget_s=50)
+
+    assert timeouts == [50]  # the first mirror used the whole budget; no others were tried

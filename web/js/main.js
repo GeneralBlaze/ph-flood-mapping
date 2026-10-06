@@ -6,11 +6,15 @@ import { defaultLayer, isLayerAvailable, readState, writeState } from "./state.j
 import { nearbyLandmarks } from "./local-terrain.js";
 import { analyseSpot } from "./spot-terrain.js";
 import { STEPS, analyseArea } from "./area-runner.js";
+import { polygonAreaKm2 } from "./area-analysis.js";
+import { fullAnalysisEnabled, runFullAnalysis } from "./full-area.js";
+import { resetFull, showFullError, showFullProgress, showFullResult } from "./full-report.js";
 import { open3d } from "./view3d.js";
 
 const DATA_ROOT = "data/";
 const NEARBY_MAX_M = 600;
 const NEARBY_LIMIT = 3;
+const FULL_MAX_KM2 = 10; // the server's limit (analysis/area_request.py)
 const SITE_OVERLAY_OPACITY = 0.45; // at street zoom the imagery under the flood shading must stay visible
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const cache = new Map();
@@ -302,17 +306,66 @@ async function start() {
     );
   }
 
+  // Full (server) analysis: started by the person, never from a shared link, since each run uses quota
+  let fullRun = null; // { controller } of the run in progress or shown
+  const fullIntro = $("full-intro").textContent.trim();
+  const fullEnabled = fullAnalysisEnabled();
+  $("full-run").hidden = true;
+  fullEnabled.then((enabled) => { $("full-run").hidden = !enabled; });
+
+  function stopFull() {
+    fullRun?.controller.abort();
+    fullRun = null;
+    map.clearFull();
+  }
+
+  function prepareFull() {
+    const km2 = polygonAreaKm2(state.area);
+    const tooBig = km2 > FULL_MAX_KM2;
+    $("full-start").textContent = "Run full analysis";
+    resetFull({
+      startable: !tooBig,
+      intro: tooBig
+        ? `The full analysis takes areas up to ${FULL_MAX_KM2} km²; this one is ${km2.toFixed(0)} km². Draw a smaller area to run it.`
+        : fullIntro,
+    });
+  }
+
+  async function startFull() {
+    if (!state.area) return;
+    stopFull();
+    const controller = new AbortController();
+    fullRun = { controller };
+    try {
+      const result = await runFullAnalysis({ ring: state.area, onProgress: showFullProgress, signal: controller.signal });
+      if (fullRun?.controller !== controller) return;
+      showFullResult(result, (i) => {
+        // On phones the sheet covers the map: lower it first so the site is in view
+        if (window.matchMedia("(max-width: 768px)").matches && $("sheet").dataset.expanded === "true") $("sheet-toggle").click();
+        map.focusGeometry(result.sites[i].geometry, reducedMotion.matches);
+      });
+      map.hideAreaRunoff();
+      map.showFull(result, reducedMotion.matches);
+    } catch (error) {
+      if (controller.signal.aborted || fullRun?.controller !== controller) return;
+      showFullError(error instanceof Error ? error.message : "The full analysis failed; please try again.");
+    }
+  }
+
   async function renderArea(lga, landmarks) {
     const key = areaKey();
     $("area-report").hidden = !key;
     $("draw-start").hidden = Boolean(key) || drawTool.active;
     if (!key) {
       areaDone = null;
+      stopFull();
       map.clearArea();
       return;
     }
     if (areaDone === key) return;
     areaDone = key;
+    stopFull();
+    prepareFull();
     // On phones the report lives in the bottom sheet: open it so the progress bar is visible
     if (window.matchMedia("(max-width: 768px)").matches && $("sheet").dataset.expanded !== "true") $("sheet-toggle").click();
     $("area-lines").replaceChildren();
@@ -439,6 +492,7 @@ async function start() {
     if (ring) setState({ area: ring, site: null, at: null });
   });
   $("area-clear").addEventListener("click", () => setState({ area: null }, { refit: true }));
+  $("full-start").addEventListener("click", startFull);
   $("basemap-satellite").addEventListener("click", () => setBasemap("satellite"));
   $("basemap-street").addEventListener("click", () => setBasemap("street"));
   $("boundary-toggle").checked = state.boundary;

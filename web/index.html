@@ -123,6 +123,34 @@
             Worked out in your browser from the published 30 m terrain and radar layers. Drains and culverts are not
             in this data; hollows shallower than 0.3 m are not shown.
           </p>
+
+          <div class="full-run" id="full-run">
+            <h3 class="full-run__title">Full analysis</h3>
+            <p class="full-run__intro" id="full-intro">
+              Satellite radar for the last six rainy seasons and the latest pass, the buildings standing on each
+              drainage route, and the streets involved. Takes one to three minutes.
+            </p>
+            <button type="button" class="site-bar__back draw-bar__finish" id="full-start">Run full analysis</button>
+            <div class="progress" id="full-progress" role="progressbar" aria-label="Running the full analysis"
+                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+              <span class="progress__bar" id="full-progress-bar"></span>
+            </div>
+            <p class="progress__step" id="full-step" aria-live="polite"></p>
+            <div class="site-report__story" id="full-lines"></div>
+            <ol class="full-sites" id="full-sites"></ol>
+            <ul class="site-bar__key" id="full-key" aria-label="Key" hidden>
+              <li><span class="key key--history" aria-hidden="true"></span>Flooded in past rainy seasons (darker = more often)</li>
+              <li><span class="key key--latest" aria-hidden="true"></span>Under water on the latest pass</li>
+              <li><span class="key key--route" aria-hidden="true"></span>Route water should take</li>
+              <li><span class="key key--building" aria-hidden="true"></span>Buildings on that route</li>
+            </ul>
+            <p class="site-report__caveat" id="full-caveat" hidden>
+              Radar sees open water at 10 m; water under trees or in narrow streets can be missed. Elevation is 30 m
+              FABDEM; drains and culverts are not in the data, which is why blocked drains show up as water that stays
+              where the ground says it should run off.
+            </p>
+          </div>
+
           <button type="button" class="site-bar__back" id="area-clear">Clear area</button>
         </section>
 

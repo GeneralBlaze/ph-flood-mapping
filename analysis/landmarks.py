@@ -74,7 +74,8 @@ def parse_landmarks(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return landmarks
 
 
-def fetch_landmarks(bbox: tuple[float, float, float, float], cache: Path) -> list[dict[str, Any]]:
+def fetch_landmarks(bbox: tuple[float, float, float, float], cache: Path,
+                    budget_s: float | None = None) -> list[dict[str, Any]]:
     """Landmarks inside (south, west, north, east); the raw response is cached to disk."""
     if cache.exists():
         return parse_landmarks(json.loads(cache.read_text()))
@@ -88,7 +89,7 @@ def fetch_landmarks(bbox: tuple[float, float, float, float], cache: Path) -> lis
         f'nwr["junction"="roundabout"]["name"]{box};'
         ");out center tags;"
     )
-    payload = query_overpass(query)
+    payload = query_overpass(query, budget_s)
     cache.write_text(json.dumps(payload))
     return parse_landmarks(payload)
 

@@ -111,6 +111,8 @@ export function createMap(container) {
   const local = L.layerGroup().addTo(map); // pools and the spot pin
   const area = L.layerGroup().addTo(map); // drawn area outline and its hollows
   let areaFlowLayer = null;
+  const full = L.layerGroup().addTo(map); // full analysis: radar overlays, sites, buildings
+  let fullFlowLayer = null;
 
   return {
     fitTo(bounds) {
@@ -231,6 +233,12 @@ export function createMap(container) {
       }
     },
 
+    /** Drops the instant report's runoff lines (the full analysis draws its own routes). */
+    hideAreaRunoff() {
+      areaFlowLayer?.remove();
+      areaFlowLayer = null;
+    },
+
     clearArea() {
       area.clearLayers();
       areaFlowLayer?.remove();
@@ -242,6 +250,61 @@ export function createMap(container) {
       map.closePopup();
       if (reducedMotion) map.fitBounds(ring, options);
       else map.flyToBounds(ring, { ...options, duration: 0.8 });
+    },
+
+    /** Full analysis of the drawn area: radar overlays, flooded sites, their routes and blocking buildings. */
+    showFull({ overlays, sites }, reducedMotion) {
+      this.clearFull();
+      overlays.forEach((o) => L.imageOverlay(o.url, o.bounds, {
+        opacity: o.kind === "latest" ? 0.7 : 0.75,
+        alt: o.kind === "latest" ? "Water on the latest radar pass" : "Flood history",
+      }).addTo(full));
+      sites.forEach((site, i) => {
+        L.geoJSON(site.geometry, {
+          style: { color: cssVar("--signal"), weight: 2, fill: false }, interactive: false,
+        }).addTo(full);
+        if (site.buildings.footprints.length) {
+          L.geoJSON({ type: "MultiPolygon", coordinates: site.buildings.footprints }, {
+            style: { color: cssVar("--obstruction"), weight: 2, fillColor: cssVar("--obstruction"), fillOpacity: 0.35 },
+            interactive: false,
+          }).addTo(full);
+        }
+        const centre = L.geoJSON(site.geometry).getBounds().getCenter();
+        L.marker(centre, {
+          icon: L.divIcon({ className: "", html: `<span class="hotspot__rank map-rank">${i + 1}</span>`, iconSize: [24, 24] }),
+          interactive: false, keyboard: false,
+        }).addTo(full);
+      });
+      const rows = sites.flatMap((site) => {
+        const points = site.route.filter((_, k) => k % 2 === 0 || k === site.route.length - 1);
+        return points.slice(1).map(([lon, lat], k) => [points[k][0], points[k][1], lon, lat, ROUTE_UPSTREAM_KM2]);
+      });
+      sites.forEach((site) => {
+        if (site.route.length > 1) {
+          L.polyline(site.route.map(([lon, lat]) => [lat, lon]), { color: "#ffffff", weight: 6, opacity: 0.8, interactive: false })
+            .addTo(full);
+        }
+      });
+      if (rows.length) {
+        fullFlowLayer = createFlowLayer({
+          colour: cssVar("--channel"), reducedMotion, arrowPx: 3, lineAlpha: 1, widthScale: 1,
+          pane: "fullFlowPane", zIndex: 458,
+        }).addTo(map);
+        fullFlowLayer.setData(rows);
+      }
+    },
+
+    clearFull() {
+      full.clearLayers();
+      fullFlowLayer?.remove();
+      fullFlowLayer = null;
+    },
+
+    focusGeometry(geometry, reducedMotion) {
+      const bounds = L.geoJSON(geometry).getBounds().pad(0.6);
+      const options = { maxZoom: SITE_ZOOM, ...clearOfPanels(SITE_PADDING) };
+      if (reducedMotion) map.fitBounds(bounds, options);
+      else map.flyToBounds(bounds, { ...options, duration: 0.8 });
     },
 
     onMapClick(handler) {

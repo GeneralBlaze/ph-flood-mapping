@@ -25,7 +25,8 @@ METRES_PER_DEG_LAT = 110_574.0
 METRES_PER_DEG_LON_EQUATOR = 111_320.0
 
 
-def fetch_roads(bbox: tuple[float, float, float, float], cache: Path) -> list[dict[str, Any]]:
+def fetch_roads(bbox: tuple[float, float, float, float], cache: Path,
+                budget_s: float | None = None) -> list[dict[str, Any]]:
     """Roads inside (south, west, north, east); the raw response is cached to disk."""
     if cache.exists():
         return parse_roads(json.loads(cache.read_text()))
@@ -35,7 +36,7 @@ def fetch_roads(bbox: tuple[float, float, float, float], cache: Path) -> list[di
         f'way["highway"~"^({ROAD_TYPES})$"]({south},{west},{north},{east});'
         "out tags geom;"
     )
-    payload = query_overpass(query)
+    payload = query_overpass(query, budget_s)
     cache.write_text(json.dumps(payload))
     return parse_roads(payload)
 
@@ -43,7 +44,8 @@ def fetch_roads(bbox: tuple[float, float, float, float], cache: Path) -> list[di
 AEROWAY_TYPES = "runway|taxiway|apron|helipad|aerodrome"  # aerodrome = whole airfield outline
 
 
-def fetch_aeroways(bbox: tuple[float, float, float, float], cache: Path) -> list[BaseGeometry]:
+def fetch_aeroways(bbox: tuple[float, float, float, float], cache: Path,
+                   budget_s: float | None = None) -> list[BaseGeometry]:
     """Airfield paving (runways, taxiways, aprons) — smooth enough to read as water on radar."""
     if cache.exists():
         return parse_aeroways(json.loads(cache.read_text()))
@@ -53,7 +55,7 @@ def fetch_aeroways(bbox: tuple[float, float, float, float], cache: Path) -> list
         f'way["aeroway"~"^({AEROWAY_TYPES})$"]({south},{west},{north},{east});'
         "out tags geom;"
     )
-    payload = query_overpass(query)
+    payload = query_overpass(query, budget_s)
     cache.write_text(json.dumps(payload))
     return parse_aeroways(payload)
 

@@ -49,8 +49,8 @@ RIM_WINDOW_M = 45                    # street height = median along this stretch
 RIM_LIMIT = 3
 
 
-def _grid_origin(region: ee.Geometry) -> tuple[float, float, int, int]:
-    south, west, north, east = outputs.bounds(region.buffer(GRID_BUFFER_M))
+def _grid_origin(bbox: tuple[float, float, float, float]) -> tuple[float, float, int, int]:
+    south, west, north, east = bbox
     west, north = math.floor(west / PIXEL_DEG) * PIXEL_DEG, math.ceil(north / PIXEL_DEG) * PIXEL_DEG
     return west, north, math.ceil((east - west) / PIXEL_DEG), math.ceil((north - south) / PIXEL_DEG)
 
@@ -60,7 +60,15 @@ def load_grid(region: ee.Geometry, cache: Path) -> dict[str, Any]:
     if cache.exists():
         saved = np.load(cache)
         return {"dem": saved["dem"], "west": float(saved["west"]), "north": float(saved["north"])}
-    west, north, cols, rows = _grid_origin(region)
+    return load_grid_bbox(outputs.bounds(region.buffer(GRID_BUFFER_M)), cache)
+
+
+def load_grid_bbox(bbox: tuple[float, float, float, float], cache: Path) -> dict[str, Any]:
+    """As load_grid, for a (south, west, north, east) box that already includes the routing margin."""
+    if cache.exists():
+        saved = np.load(cache)
+        return {"dem": saved["dem"], "west": float(saved["west"]), "north": float(saved["north"])}
+    west, north, cols, rows = _grid_origin(bbox)
     dem = ee.ImageCollection(FABDEM_ASSET).mosaic().select(0).rename("elv").unmask(NODATA).toFloat()
     water = ee.Image(config.JRC_ASSET).select("occurrence").unmask(0).rename("occ").toFloat()
     url = dem.addBands(water).getDownloadURL({"format": "NPY", "crs": "EPSG:4326",
@@ -141,11 +149,17 @@ def _rim_heights(site, roads: list[dict[str, Any]], grid: dict[str, Any], hydro:
     return [{"name": n, "height_m": round(h, 1)} for n, h in heights.items()]
 
 
-def _buildings_by_street(footprints: list, route: list[tuple[float, float]], roads) -> dict[str | None, int]:
+def building_centres(footprints: list) -> list[tuple[float, float]]:
+    centres = [shape({"type": "Polygon", "coordinates": polygon}).centroid for polygon in footprints]
+    return [(round(c.x, 6), round(c.y, 6)) for c in centres]
+
+
+def _buildings_by_street(centres: list[tuple[float, float]], route: list[tuple[float, float]],
+                         roads) -> dict[str | None, int]:
     counts: dict[str | None, int] = {}
     line = LineString(route) if len(route) > 1 else None
-    for polygon in footprints:
-        centre = shape({"type": "Polygon", "coordinates": polygon}).centroid
+    for lon, lat in centres:
+        centre = Point(lon, lat)
         anchor = line.interpolate(line.project(centre)) if line else centre
         street = _nearest_named((anchor.x, anchor.y), roads, BUILDING_STREET_M)
         counts[street] = counts.get(street, 0) + 1
@@ -173,17 +187,19 @@ def build_hydro(grid: dict[str, Any]) -> dict[str, Any]:
     dx = PIXEL_DEG * 111_320.0 * math.cos(math.radians(grid["north"]))
     dy = PIXEL_DEG * 110_574.0
     log.info("Filling and routing %s cells", grid["dem"].size)
-    dirs = d8_directions(priority_flood(grid["dem"], FILL_EPS_M), dx, dy)
-    return {"dirs": dirs, "acc": flow_accumulation(dirs),
+    filled = priority_flood(grid["dem"], FILL_EPS_M)
+    dirs = d8_directions(filled, dx, dy)
+    return {"filled": filled, "dirs": dirs, "acc": flow_accumulation(dirs),
             "channel_cells": int(config.CHANNEL_UPA_KM2 * 1e6 / (dx * dy))}
 
 
-def _story_for(site, routed, roads, grid, hydro, footprints) -> dict[str, Any]:
+def story_for(site, routed, roads, grid, hydro, centres) -> dict[str, Any]:
+    """Street-level account for one site; centres = building centres (lon, lat) on its route."""
     route = routed["route"]
     rise = routed["rise_m"]
     barrier_street = _nearest_named(routed["barrier"], roads, BARRIER_STREET_M) if routed["barrier"] and rise >= 0.5 else None
     streets = streets_along(route, roads, STREET_TOLERANCE_M)
-    by_street = _buildings_by_street(footprints, route, roads)
+    by_street = _buildings_by_street(centres, route, roads)
     rim = rim_summary(_rim_heights(site, roads, grid, hydro, routed["ground"]), RIM_LIMIT) \
         if not math.isnan(routed["ground"]) else []
     route_m = _length_m(route) if len(route) > 1 else 0.0
@@ -213,7 +229,7 @@ def run(lga: str) -> dict:
     stories, routes, footprints = [], [], []
     for rank in sorted(sites):
         hit = found.get(rank, {"footprints": []})
-        story = _story_for(sites[rank], routed[rank], roads, grid, hydro, hit["footprints"])
+        story = story_for(sites[rank], routed[rank], roads, grid, hydro, building_centres(hit["footprints"]))
         stories.append({"rank": rank, **story})
         if len(routed[rank]["route"]) > 1:
             routes.append({"type": "Feature", "properties": {"rank": rank},
