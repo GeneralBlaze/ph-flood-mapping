@@ -61,10 +61,11 @@ def _chunk(kind: bytes, data: bytes) -> bytes:
 
 
 def png_bytes(rgb: np.ndarray) -> bytes:
-    """Minimal 8-bit RGB PNG."""
+    """Minimal 8-bit PNG: RGB for (h, w, 3) arrays, RGBA (with transparency) for (h, w, 4)."""
     height, width = rgb.shape[:2]
-    raw = b"".join(b"\x00" + rgb[row].tobytes() for row in range(height))
-    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    colour_type = 6 if rgb.shape[2] == 4 else 2
+    raw = b"".join(b"\x00" + rgb[row].astype(np.uint8).tobytes() for row in range(height))
+    header = struct.pack(">IIBBBBB", width, height, 8, colour_type, 0, 0, 0)
     return b"\x89PNG\r\n\x1a\n" + _chunk(b"IHDR", header) + _chunk(b"IDAT", zlib.compress(raw, 9)) + _chunk(b"IEND", b"")
 
 

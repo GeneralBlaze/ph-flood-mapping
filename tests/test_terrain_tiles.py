@@ -71,3 +71,20 @@ def test_sample_tile_extends_edge_heights_outside_the_grid():
     heights = sample_tile(grid, 1 / 3600, 4250, 4000, 13)
 
     assert heights.min() == pytest.approx(25.0)
+
+
+def test_png_bytes_writes_rgba_when_given_four_channels():
+    import struct
+    import zlib
+
+    import numpy as np
+
+    from analysis.terrain_tiles import png_bytes
+
+    rgba = np.zeros((2, 3, 4), dtype=np.uint8)
+    rgba[0, 0] = [31, 111, 255, 255]
+    data = png_bytes(rgba)
+    width, height, depth, colour_type = struct.unpack(">IIBB", data[16:26])
+    assert (width, height, depth, colour_type) == (3, 2, 8, 6)
+    raw = zlib.decompress(data[data.index(b"IDAT") + 4: data.index(b"IEND") - 8])
+    assert raw[1:5] == bytes([31, 111, 255, 255]) and raw[5:9] == bytes(4)

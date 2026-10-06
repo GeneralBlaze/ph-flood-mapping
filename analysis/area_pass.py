@@ -225,7 +225,8 @@ def run_history(ring: list[list[float]]) -> dict[str, Any]:
     by_years = hectares_where(years_img, geom)
     recurrent_ha = round(sum(ha for years, ha in by_years.items() if years >= config.REPEAT_MIN_YEARS), 1)
     max_years = len(parse_years(config.STACK_YEARS))
-    overlay = overlay_png(years_img.selfMask().visualize(min=1, max=max_years, palette=YEARS_PALETTE[:max_years]), geom)
+    colours = {years: YEARS_PALETTE[years - 1] for years in range(1, max_years + 1)}
+    overlay = overlay_png(years_img, colours, bbox_with_margin(ring, 0))
     return {"mode": mode, "recurrent_ha": recurrent_ha,
             "overlay": {"kind": "history", "bounds": _bounds(ring), "url": overlay},
             "patches": patches(years_img.gte(config.REPEAT_MIN_YEARS), geom),
@@ -244,7 +245,7 @@ def run_latest(ring: list[list[float]], today: Date | None = None) -> dict[str, 
     overlay = None
     if latest["flooded_ha"] > 0:
         overlay = {"kind": "latest", "bounds": _bounds(ring),
-                   "url": overlay_png(mask.selfMask().visualize(palette=[LATEST_COLOUR]), geom)}
+                   "url": overlay_png(mask, {1: LATEST_COLOUR}, bbox_with_margin(ring, 0))}
     return {"latest": latest, "overlay": overlay, "patches": patches(mask, geom), "line": latest_line(latest)}
 
 

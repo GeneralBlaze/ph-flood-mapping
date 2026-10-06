@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
 
+import pytest
+
 from analysis.area_radar import (
     hectares_by_value, history_line, latest_line, latest_passes, scene_thresholds, traced_line,
 )
@@ -62,3 +64,30 @@ def test_scene_thresholds_skips_empty_scenes_and_caps():
     assert -22 < found[0] < -19
     assert found[1:] == [None, None]
     assert scene_thresholds([bimodal], cap=-21.5) == [-21.5]
+
+
+def test_mercator_grid_covers_the_box_with_the_long_side_at_max_px():
+    from analysis.area_radar import mercator_grid
+
+    grid = mercator_grid((4.80, 7.00, 4.81, 7.02), max_px=768)   # (south, west, north, east): twice as wide as tall
+    assert grid["crsCode"] == "EPSG:3857"
+    assert grid["dimensions"]["width"] == 768
+    assert 380 <= grid["dimensions"]["height"] <= 390
+    t = grid["affineTransform"]
+    assert t["translateX"] == pytest.approx(7.00 * 20037508.34 / 180, rel=1e-6)
+    assert t["scaleY"] < 0
+    assert t["translateX"] + t["scaleX"] * 768 == pytest.approx(7.02 * 20037508.34 / 180, rel=1e-6)
+
+
+def test_colourise_maps_values_to_colours_and_leaves_zero_transparent():
+    import numpy as np
+
+    from analysis.area_radar import colourise
+
+    values = np.array([[0, 1], [2, 9]], dtype=np.uint8)
+    rgba = colourise(values, {1: "c6dbef", 2: "08306b"}, alpha=200)
+    assert rgba.shape == (2, 2, 4)
+    assert tuple(rgba[0, 0]) == (0, 0, 0, 0)
+    assert tuple(rgba[0, 1]) == (0xc6, 0xdb, 0xef, 200)
+    assert tuple(rgba[1, 0]) == (0x08, 0x30, 0x6b, 200)
+    assert tuple(rgba[1, 1]) == (0, 0, 0, 0)       # no colour for this value

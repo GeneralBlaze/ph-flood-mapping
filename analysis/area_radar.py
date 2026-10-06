@@ -8,20 +8,22 @@ in two batched requests (water, then change), not one request per scene, so it f
 
 import base64
 import logging
-import urllib.request
+import math
 from datetime import date as Date
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import ee
+import numpy as np
 
-from analysis import config, outputs
+from analysis import config
 from analysis.ee_assets import asset_exists
 from analysis.flood_detection import detect_flood, excluded_water
 from analysis.otsu import otsu_threshold
 from analysis.sar import baseline_composite, despeckle, event_image, s1_collection
 from analysis.seasons import parse_years, season_windows
 from analysis.stacking import asset_id, frequency_image, remove_specks
+from analysis.terrain_tiles import png_bytes
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ SAME_PASS_DAYS = 0                 # other orbits imaged the same day fill swath
 PATCH_MIN_PIXELS = config.REPEAT_MIN_PATCH_PIXELS   # ~0.5 ha at 10 m
 MAX_PATCHES = 8
 OVERLAY_PX = 768
+OVERLAY_ALPHA = 255                 # the map sets the overlay opacity
 LATEST_COLOUR = "1f6fff"
 YEARS_PALETTE = ["c6dbef", "9ecae1", "6baed6", "3182bd", "08519c", "08306b"]  # as run_stage3.py
 
@@ -232,12 +235,47 @@ def years_flooded(ring_geom: ee.Geometry) -> tuple[ee.Image, str]:
     return _estimate_years(ring_geom, years), "estimate"
 
 
-def overlay_png(image: ee.Image, ring_geom: ee.Geometry) -> str:
-    """Web Mercator PNG of the area's bounding box as a data URI, for a Leaflet imageOverlay."""
-    url = image.getThumbURL({"region": ring_geom.bounds(), "dimensions": OVERLAY_PX, "format": "png",
-                             "crs": "EPSG:3857"})
-    with urllib.request.urlopen(url, timeout=outputs.DOWNLOAD_TIMEOUT_S) as response:
-        return "data:image/png;base64," + base64.b64encode(response.read()).decode()
+MERCATOR_HALF_M = 20037508.34
+
+
+def _mercator(lon: float, lat: float) -> tuple[float, float]:
+    x = lon * MERCATOR_HALF_M / 180
+    y = math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * MERCATOR_HALF_M / math.pi
+    return x, y
+
+
+def mercator_grid(bbox: tuple[float, float, float, float], max_px: int) -> dict[str, Any]:
+    """Pixel grid in Web Mercator exactly covering (south, west, north, east), long side max_px."""
+    south, west, north, east = bbox
+    x0, y0 = _mercator(west, north)
+    x1, y1 = _mercator(east, south)
+    width_m, height_m = x1 - x0, y0 - y1
+    scale = max(width_m, height_m) / max_px
+    cols, rows = max(1, round(width_m / scale)), max(1, round(height_m / scale))
+    return {"dimensions": {"width": cols, "height": rows}, "crsCode": "EPSG:3857",
+            "affineTransform": {"scaleX": width_m / cols, "shearX": 0, "translateX": x0,
+                                "shearY": 0, "scaleY": -height_m / rows, "translateY": y0}}
+
+
+def colourise(values: np.ndarray, colours: dict[int, str], alpha: int) -> np.ndarray:
+    """RGBA image: each listed value in its hex colour at the given opacity; anything else transparent."""
+    rgba = np.zeros((*values.shape, 4), dtype=np.uint8)
+    for value, hex_colour in colours.items():
+        rgba[values == value] = [*bytes.fromhex(hex_colour), alpha]
+    return rgba
+
+
+def overlay_png(classes: ee.Image, colours: dict[int, str], bbox: tuple[float, float, float, float]) -> str:
+    """Web Mercator PNG of a one-band class image over the box, as a data URI for a Leaflet imageOverlay.
+
+    The class values are fetched with computePixels and coloured here: the read-only service account
+    may compute but not create thumbnail links, and Earth Engine's own PNGs cannot be transparent.
+    """
+    grid = mercator_grid(bbox, OVERLAY_PX)
+    pixels = ee.data.computePixels({"expression": classes.unmask(0).toUint8().rename("v"),
+                                    "fileFormat": "NUMPY_NDARRAY", "grid": grid})
+    png = png_bytes(colourise(np.asarray(pixels["v"]), colours, OVERLAY_ALPHA))
+    return "data:image/png;base64," + base64.b64encode(png).decode()
 
 
 def hectares_where(mask: ee.Image, ring_geom: ee.Geometry) -> dict[int, float]:

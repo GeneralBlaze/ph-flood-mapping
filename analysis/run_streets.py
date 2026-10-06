@@ -10,11 +10,9 @@ Usage:
 """
 
 import argparse
-import io
 import json
 import logging
 import math
-import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -71,11 +69,13 @@ def load_grid_bbox(bbox: tuple[float, float, float, float], cache: Path) -> dict
     west, north, cols, rows = _grid_origin(bbox)
     dem = ee.ImageCollection(FABDEM_ASSET).mosaic().select(0).rename("elv").unmask(NODATA).toFloat()
     water = ee.Image(config.JRC_ASSET).select("occurrence").unmask(0).rename("occ").toFloat()
-    url = dem.addBands(water).getDownloadURL({"format": "NPY", "crs": "EPSG:4326",
-                                              "crs_transform": [PIXEL_DEG, 0, west, 0, -PIXEL_DEG, north],
-                                              "dimensions": f"{cols}x{rows}"})
-    with urllib.request.urlopen(url, timeout=outputs.DOWNLOAD_TIMEOUT_S) as response:
-        raw = np.load(io.BytesIO(response.read()))
+    # computePixels returns the array directly (no download link), so a read-only service account can run it
+    raw = ee.data.computePixels({
+        "expression": dem.addBands(water), "fileFormat": "NUMPY_NDARRAY",
+        "grid": {"dimensions": {"width": cols, "height": rows}, "crsCode": "EPSG:4326",
+                 "affineTransform": {"scaleX": PIXEL_DEG, "shearX": 0, "translateX": west,
+                                     "shearY": 0, "scaleY": -PIXEL_DEG, "translateY": north}},
+    })
     heights = raw["elv"].astype(float)
     heights[(heights <= NODATA + 1) | (raw["occ"] >= PERMANENT_WATER_PCT)] = np.nan
     np.savez_compressed(cache, dem=heights, west=west, north=north)
