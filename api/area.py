@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root: the analysis package
 
-from analysis.area_server import MAX_BODY_BYTES, handle, status  # noqa: E402
+from analysis.area_server import MAX_BODY_BYTES, handle, remember_oidc_token, status  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
@@ -34,6 +34,7 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 — the name Vercel's Pytho
         if length <= 0 or length > MAX_BODY_BYTES:
             self._send(413 if length > MAX_BODY_BYTES else 400, {"error": "Could not read the request."})
             return
+        remember_oidc_token(self.headers.get("x-vercel-oidc-token"))  # keyless Earth Engine login
         status, payload = handle(self.rfile.read(length), client_address(self.headers, self.client_address[0]))
         self._send(status, payload)
 

@@ -119,3 +119,44 @@ def test_status_reports_whether_the_analysis_is_switched_on(monkeypatch):
     assert area_server.status() == {"enabled": False}
     monkeypatch.setenv("EE_SERVICE_ACCOUNT_KEY", "{}")
     assert area_server.status() == {"enabled": True}
+
+
+FEDERATION = {
+    "GCP_PROJECT_NUMBER": "123456789",
+    "GCP_SERVICE_ACCOUNT_EMAIL": "ph-flood-server@ph-flood-mapping.iam.gserviceaccount.com",
+    "GCP_WORKLOAD_IDENTITY_POOL_ID": "vercel",
+    "GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID": "vercel",
+    "AREA_TOKEN_SECRET": "run-token-secret",
+}
+
+
+def test_keyless_setup_switches_the_analysis_on(monkeypatch):
+    monkeypatch.delenv("EE_SERVICE_ACCOUNT_KEY", raising=False)
+    monkeypatch.delenv("AREA_LOCAL_DEV", raising=False)
+    for name, value in FEDERATION.items():
+        monkeypatch.setenv(name, value)
+    assert area_server.status() == {"enabled": True}
+    monkeypatch.delenv("AREA_TOKEN_SECRET")  # run tokens must be signed with a real secret
+    assert area_server.status() == {"enabled": False}
+
+
+def test_federated_credentials_exchange_the_latest_vercel_token(monkeypatch):
+    for name, value in FEDERATION.items():
+        monkeypatch.setenv(name, value)
+    credentials = area_server.federated_credentials()
+    assert credentials._audience == (
+        "//iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/vercel/providers/vercel")
+    assert credentials.service_account_email == FEDERATION["GCP_SERVICE_ACCOUNT_EMAIL"]
+
+    area_server.remember_oidc_token("header-token")
+    assert area_server.VercelTokenSupplier().get_subject_token(None, None) == "header-token"
+
+
+def test_token_supplier_fails_clearly_without_a_token(monkeypatch):
+    from google.auth.exceptions import RefreshError
+
+    monkeypatch.setattr(area_server, "_oidc_token", None)
+    monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
+    import pytest as _pytest
+    with _pytest.raises(RefreshError):
+        area_server.VercelTokenSupplier().get_subject_token(None, None)

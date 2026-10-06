@@ -11,6 +11,8 @@ import os
 from typing import Any, Callable
 
 import ee
+from google.auth import identity_pool
+from google.auth.exceptions import RefreshError
 
 from analysis import config
 from analysis.area_pass import run_buildings, run_history, run_latest, run_routes, run_streets
@@ -18,8 +20,13 @@ from analysis.area_request import AreaError, RateLimiter, check_token, issue_tok
 
 log = logging.getLogger(__name__)
 
-KEY_ENV = "EE_SERVICE_ACCOUNT_KEY"     # the service account's JSON key, stored as a Vercel secret
-SECRET_ENV = "AREA_TOKEN_SECRET"       # optional; otherwise derived from the key
+KEY_ENV = "EE_SERVICE_ACCOUNT_KEY"     # a service account JSON key (fallback; keyless federation preferred)
+SECRET_ENV = "AREA_TOKEN_SECRET"       # signs run tokens; required for keyless federation
+# Keyless login: Vercel's per-request OIDC token is exchanged for short-lived Google credentials
+FEDERATION_ENV = ("GCP_PROJECT_NUMBER", "GCP_SERVICE_ACCOUNT_EMAIL", "GCP_WORKLOAD_IDENTITY_POOL_ID",
+                  "GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID")
+OIDC_ENV = "VERCEL_OIDC_TOKEN"
+EE_SCOPES = ["https://www.googleapis.com/auth/earthengine", "https://www.googleapis.com/auth/cloud-platform"]
 LOCAL_DEV_ENV = "AREA_LOCAL_DEV"       # "1": use this computer's own Earth Engine login
 RUNS_PER_WINDOW = 3
 STEPS_PER_WINDOW = 30                  # a run is 5 steps; this stops one token being replayed endlessly
@@ -36,6 +43,41 @@ STEPS: dict[str, Callable[[dict[str, Any], list[list[float]]], dict[str, Any]]] 
     "streets": lambda body, ring: run_streets(ring, body.get("sites"), body.get("routed")),
 }
 
+_oidc_token: str | None = None  # the latest Vercel OIDC token (every request carries a fresh one)
+
+
+def remember_oidc_token(token: str | None) -> None:
+    global _oidc_token
+    if token:
+        _oidc_token = token
+
+
+class VercelTokenSupplier(identity_pool.SubjectTokenSupplier):
+    def get_subject_token(self, context, request) -> str:
+        token = _oidc_token or os.environ.get(OIDC_ENV)
+        if not token:
+            raise RefreshError("No Vercel OIDC token: is OIDC federation enabled for this project?")
+        return token
+
+
+def _federation_configured() -> bool:
+    return all(os.environ.get(name) for name in FEDERATION_ENV) and bool(os.environ.get(SECRET_ENV))
+
+
+def federated_credentials() -> identity_pool.Credentials:
+    number, email, pool, provider = (os.environ[name] for name in FEDERATION_ENV)
+    return identity_pool.Credentials(
+        audience=f"//iam.googleapis.com/projects/{number}/locations/global/workloadIdentityPools/{pool}"
+                 f"/providers/{provider}",
+        subject_token_type="urn:ietf:params:oauth:token-type:jwt",
+        token_url="https://sts.googleapis.com/v1/token",
+        subject_token_supplier=VercelTokenSupplier(),
+        service_account_impersonation_url=f"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/"
+                                          f"{email}:generateAccessToken",
+        scopes=EE_SCOPES,
+    )
+
+
 limiter = RateLimiter(RUNS_PER_WINDOW, WINDOW_S)
 step_limiter = RateLimiter(STEPS_PER_WINDOW, WINDOW_S)
 _ee_ready = False
@@ -47,7 +89,9 @@ def ensure_earth_engine() -> bool:
     if _ee_ready:
         return True
     key = os.environ.get(KEY_ENV)
-    if key:
+    if _federation_configured():
+        ee.Initialize(federated_credentials(), project=config.EE_PROJECT)
+    elif key:
         info = json.loads(key)
         credentials = ee.ServiceAccountCredentials(info["client_email"], key_data=key)
         ee.Initialize(credentials, project=info.get("project_id", config.EE_PROJECT))
@@ -62,7 +106,8 @@ def ensure_earth_engine() -> bool:
 
 def status() -> dict[str, Any]:
     """Whether the full analysis is configured on this server (the page hides it when not)."""
-    return {"enabled": bool(os.environ.get(KEY_ENV)) or os.environ.get(LOCAL_DEV_ENV) == "1"}
+    enabled = _federation_configured() or bool(os.environ.get(KEY_ENV)) or os.environ.get(LOCAL_DEV_ENV) == "1"
+    return {"enabled": enabled}
 
 
 def token_secret() -> bytes:

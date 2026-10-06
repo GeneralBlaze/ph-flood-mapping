@@ -77,13 +77,22 @@ elsewhere it is recomputed scene by scene with thresholds set over the area.
 python -m analysis.dev_server --port 8792   # site + /api/area with your own Earth Engine login
 ```
 
-On Vercel it stays hidden until these environment variables are set
-(Settings → Environment Variables, marked Sensitive):
+On Vercel it stays hidden until it can log in to Earth Engine. It logs in
+without a key: Vercel's per-request OIDC token is exchanged (Workload Identity
+Federation) for short-lived credentials of the service account
+`ph-flood-server@ph-flood-mapping.iam.gserviceaccount.com`, which has only the
+roles *Earth Engine Resource Viewer* and *Service Usage Consumer*. Environment
+variables (Settings → Environment Variables):
 
-- `EE_SERVICE_ACCOUNT_KEY`: the JSON key of a service account in the Earth
-  Engine project, with the roles *Earth Engine Resource Viewer* and *Service
-  Usage Consumer*. Never commit it.
-- `AREA_TOKEN_SECRET` (optional): signs run tokens; derived from the key if unset.
+- `GCP_PROJECT_NUMBER`, `GCP_SERVICE_ACCOUNT_EMAIL`,
+  `GCP_WORKLOAD_IDENTITY_POOL_ID`, `GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID`
+- `AREA_TOKEN_SECRET` (Sensitive): a random string that signs run tokens.
+
+The pool's OIDC provider trusts issuer `https://oidc.vercel.com/<team-slug>`,
+audience `https://vercel.com/<team-slug>`, maps `google.subject` to
+`assertion.sub`, and only this project's production deployments may use the
+service account. A JSON key in `EE_SERVICE_ACCOUNT_KEY` also works but is not
+recommended.
 
 Limits: 3 runs and 30 step requests per connection per 10 minutes in each
 server instance, and a signed token ties the later steps to the first. Add a
