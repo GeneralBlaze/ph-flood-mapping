@@ -80,7 +80,7 @@ python -m analysis.dev_server --port 8792   # site + /api/area with your own Ear
 On Vercel it stays hidden until it can log in to Earth Engine. It logs in
 without a key: Vercel's per-request OIDC token is exchanged (Workload Identity
 Federation) for short-lived credentials of the service account
-`ph-flood-server@ph-flood-mapping.iam.gserviceaccount.com`, which has only the
+`ph-flood-mapping-service-acc@ph-flood-mapping.iam.gserviceaccount.com`, which has only the
 roles *Earth Engine Resource Viewer* and *Service Usage Consumer*. Environment
 variables (Settings → Environment Variables):
 

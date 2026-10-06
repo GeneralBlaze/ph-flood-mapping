@@ -146,7 +146,12 @@ def handle(body: bytes, client: str) -> tuple[int, dict[str, Any]]:
             return _error(429, busy)
     elif not check_token(request.get("token"), ring, secret):
         return _error(403, "This analysis has expired or does not match the drawn area; please run it again.")
-    if not ensure_earth_engine():
+    try:
+        ready = ensure_earth_engine()
+    except Exception:  # noqa: BLE001 — a login failure must not crash the function; details go to the log
+        log.exception("Earth Engine login failed")
+        return _error(503, "The full analysis is not available right now; please try again later.")
+    if not ready:
         return _error(503, "The full analysis is not switched on yet.")
     try:
         result = STEPS[step](request, ring)

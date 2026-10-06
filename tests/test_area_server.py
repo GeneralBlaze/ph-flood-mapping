@@ -160,3 +160,14 @@ def test_token_supplier_fails_clearly_without_a_token(monkeypatch):
     import pytest as _pytest
     with _pytest.raises(RefreshError):
         area_server.VercelTokenSupplier().get_subject_token(None, None)
+
+
+def test_a_failed_earth_engine_login_returns_a_message_not_a_crash(server, monkeypatch):
+    def broken_login():
+        raise RuntimeError("Gaia id not found for email someone@example.com")
+
+    monkeypatch.setattr(area_server, "ensure_earth_engine", broken_login)
+    status, body = post({"step": "history", "ring": SQUARE})
+    assert status == 503
+    assert "someone@example.com" not in body["error"]
+    assert "not available" in body["error"]
