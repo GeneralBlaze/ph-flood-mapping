@@ -1,6 +1,10 @@
-// Shareable view state lives in the URL: ?lga=<slug>&layer=suspects|standing|frequency|event|none&boundary=0&drainage=1&hand=1&site=<rank>&at=<lat>,<lon>&area=<lat>,<lon>;…
+// Shareable view state lives in the URL: ?lga=<slug>&layer=suspects|standing|frequency|event|none&pass=<id>&tab=map|sites|history
+// &boundary=0&drainage=1&hand=1&site=<rank>&at=<lat>,<lon>&area=<lat>,<lon>;…
+
+import { listPasses } from "./passes.js";
 
 const LAYERS = ["suspects", "standing", "frequency", "event", "none"];
+export const TABS = ["map", "sites", "history"];
 
 function availableLayers(lga) {
   return LAYERS.filter((layer) => {
@@ -50,6 +54,8 @@ export function readState(search, manifest) {
   const layer = isLayerAvailable(lga, requested) ? requested : defaultLayer(lga);
   const area = parseArea(params.get("area"));
   const at = area ? null : parseSpot(params.get("at"));
+  const pass = listPasses(lga).find((p) => p.id === params.get("pass") && p.layer === layer)?.id ?? null;
+  const tab = TABS.includes(params.get("tab")) ? params.get("tab") : "map";
   return {
     lga: lga.slug,
     layer,
@@ -59,11 +65,15 @@ export function readState(search, manifest) {
     at,
     area,
     site: !at && !area && layer !== "none" ? parseSite(params.get("site")) : null,
+    pass,
+    tab,
   };
 }
 
 export function writeState(state) {
   const params = new URLSearchParams({ lga: state.lga, layer: state.layer });
+  if (state.pass) params.set("pass", state.pass);
+  if (state.tab && state.tab !== "map") params.set("tab", state.tab);
   if (!state.boundary) params.set("boundary", "0");
   if (state.drainage) params.set("drainage", "1");
   if (state.hand) params.set("hand", "1");

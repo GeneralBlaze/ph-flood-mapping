@@ -96,108 +96,134 @@
       <div class="sheet__scroll" id="sheet-content" tabindex="-1">
         <header class="cartouche">
           <p class="kicker">Rivers State Flood Survey</p>
-          <h1 id="lga-title">Loading…</h1>
+          <h1 class="cartouche__title">
+            <span class="visually-hidden" id="lga-title">Loading…</span>
+            <label class="visually-hidden" for="lga-select">Local government area</label>
+            <select class="title-select" id="lga-select"></select>
+          </h1>
           <p class="cartouche__meta" id="lga-meta"></p>
         </header>
 
-        <section class="section site-report" id="site-report" aria-labelledby="site-report-heading" hidden>
-          <h2 id="site-report-heading">Where the water goes</h2>
-          <p class="site-report__place" id="site-report-place"></p>
-          <div class="site-report__story" id="site-report-story"></div>
-          <p class="site-report__caveat">
-            From 30 m elevation data (FABDEM, accurate to about 1–2 m in built-up areas) and OpenStreetMap streets.
-            Drains, gutters and culverts are not in this data, so confirm on the ground before acting.
-          </p>
-        </section>
-
-        <section class="section site-report area-report" id="area-report" aria-labelledby="area-report-heading" hidden>
-          <h2 id="area-report-heading">Drawn area</h2>
-          <div class="progress" id="area-progress" role="progressbar" aria-label="Analysing the drawn area"
-               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
-            <span class="progress__bar" id="area-progress-bar"></span>
-          </div>
-          <p class="progress__step" id="area-step" aria-live="polite"></p>
-          <div class="site-report__story" id="area-lines"></div>
-          <ol class="hotspots" id="area-hollows"></ol>
-          <p class="site-report__caveat">
-            Worked out in your browser from the published 30 m terrain and radar layers. Drains and culverts are not
-            in this data; hollows shallower than 0.3 m are not shown.
-          </p>
-
-          <div class="full-run" id="full-run">
-            <h3 class="full-run__title">Full analysis</h3>
-            <p class="full-run__intro" id="full-intro">
-              Satellite radar for the last six rainy seasons and the latest pass, the buildings standing on each
-              drainage route, and the streets involved. Takes one to three minutes.
+        <!-- A site, tapped spot or drawn area opens here in place of the tabs -->
+        <div class="report-view" id="report-view" hidden>
+          <button type="button" class="back-link" id="report-back">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span id="report-back-label">Back</span>
+          </button>
+          <section class="section site-report" id="site-report" aria-labelledby="site-report-heading">
+            <h2 id="site-report-heading">Where the water goes</h2>
+            <p class="site-report__place" id="site-report-place"></p>
+            <div class="site-report__story" id="site-report-story"></div>
+            <p class="site-report__caveat" id="site-report-caveat">
+              From 30 m elevation data (FABDEM, accurate to about 1–2 m in built-up areas) and OpenStreetMap streets.
+              Drains, gutters and culverts are not in this data, so confirm on the ground before acting.
             </p>
-            <button type="button" class="site-bar__back draw-bar__finish" id="full-start">Run full analysis</button>
-            <div class="progress" id="full-progress" role="progressbar" aria-label="Running the full analysis"
+          </section>
+
+          <section class="section site-report area-report" id="area-report" aria-labelledby="area-report-heading" hidden>
+            <h2 id="area-report-heading">Drawn area</h2>
+            <div class="progress" id="area-progress" role="progressbar" aria-label="Analysing the drawn area"
                  aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
-              <span class="progress__bar" id="full-progress-bar"></span>
+              <span class="progress__bar" id="area-progress-bar"></span>
             </div>
-            <p class="progress__step" id="full-step" aria-live="polite"></p>
-            <div class="site-report__story" id="full-lines"></div>
-            <ol class="full-sites" id="full-sites"></ol>
-            <ul class="site-bar__key" id="full-key" aria-label="Key" hidden>
-              <li><span class="key key--history" aria-hidden="true"></span>Flooded in past rainy seasons (darker = more often)</li>
-              <li><span class="key key--latest" aria-hidden="true"></span>Under water on the latest pass</li>
-              <li><span class="key key--route" aria-hidden="true"></span>Route water should take</li>
-              <li><span class="key key--building" aria-hidden="true"></span>Buildings on that route</li>
-            </ul>
-            <p class="site-report__caveat" id="full-caveat" hidden>
-              Radar sees open water at 10 m; water under trees or in narrow streets can be missed. Elevation is 30 m
-              FABDEM; drains and culverts are not in the data, which is why blocked drains show up as water that stays
-              where the ground says it should run off.
+            <p class="progress__step" id="area-step" aria-live="polite"></p>
+            <div class="site-report__story" id="area-lines"></div>
+            <ol class="hotspots" id="area-hollows"></ol>
+            <p class="site-report__caveat">
+              Worked out in your browser from the published 30 m terrain and radar layers. Drains and culverts are not
+              in this data; hollows shallower than 0.3 m are not shown.
             </p>
+
+            <div class="full-run" id="full-run">
+              <h3 class="full-run__title">Full analysis</h3>
+              <p class="full-run__intro" id="full-intro">
+                Satellite radar for the last six rainy seasons and the latest pass, the buildings standing on each
+                drainage route, and the streets involved. Takes one to three minutes.
+              </p>
+              <button type="button" class="site-bar__back draw-bar__finish" id="full-start">Run full analysis</button>
+              <div class="progress" id="full-progress" role="progressbar" aria-label="Running the full analysis"
+                   aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+                <span class="progress__bar" id="full-progress-bar"></span>
+              </div>
+              <p class="progress__step" id="full-step" aria-live="polite"></p>
+              <div class="site-report__story" id="full-lines"></div>
+              <ol class="full-sites" id="full-sites"></ol>
+              <ul class="site-bar__key" id="full-key" aria-label="Key" hidden>
+                <li><span class="key key--history" aria-hidden="true"></span>Flooded in past rainy seasons (darker = more often)</li>
+                <li><span class="key key--latest" aria-hidden="true"></span>Under water on the latest pass</li>
+                <li><span class="key key--route" aria-hidden="true"></span>Route water should take</li>
+                <li><span class="key key--building" aria-hidden="true"></span>Buildings on that route</li>
+              </ul>
+              <p class="site-report__caveat" id="full-caveat" hidden>
+                Radar sees open water at 10 m; water under trees or in narrow streets can be missed. Elevation is 30 m
+                FABDEM; drains and culverts are not in the data, which is why blocked drains show up as water that stays
+                where the ground says it should run off.
+              </p>
+            </div>
+          </section>
+        </div>
+
+        <div class="tab-view" id="tab-view">
+          <div class="tabs" role="tablist" aria-label="Panel">
+            <button type="button" class="tabs__tab" role="tab" id="tab-map" aria-controls="panel-map" aria-selected="true">Map</button>
+            <button type="button" class="tabs__tab" role="tab" id="tab-sites" aria-controls="panel-sites" aria-selected="false" tabindex="-1">
+              Sites <span class="tabs__count" id="sites-count"></span>
+            </button>
+            <button type="button" class="tabs__tab" role="tab" id="tab-history" aria-controls="panel-history" aria-selected="false" tabindex="-1">History</button>
           </div>
 
-          <button type="button" class="site-bar__back" id="area-clear">Clear area</button>
-        </section>
+          <section class="section tab-panel" role="tabpanel" id="panel-map" aria-labelledby="tab-map">
+            <fieldset class="layers" id="layer-controls">
+              <legend class="label">Show on the map</legend>
+            </fieldset>
 
-        <section class="section" aria-labelledby="controls-heading">
-          <h2 id="controls-heading" class="visually-hidden">Map controls</h2>
-          <label class="label" for="lga-select">Local government area</label>
-          <select class="select" id="lga-select"></select>
+            <div class="readout" aria-live="polite">
+              <div id="figure"></div>
+              <div id="legend"></div>
+            </div>
 
-          <fieldset class="layers" id="layer-controls">
-            <legend class="label label--spaced">Flood layer</legend>
-          </fieldset>
+            <details class="more" id="more-map">
+              <summary>More on the map</summary>
+              <label class="check">
+                <input type="checkbox" id="boundary-toggle" checked />
+                <span>LGA boundary</span>
+              </label>
+              <fieldset class="terrain" id="terrain-controls">
+                <legend class="label">Terrain</legend>
+                <label class="check">
+                  <input type="checkbox" id="drainage-toggle" />
+                  <span class="check__text">
+                    Natural drainage paths
+                    <span class="check__note">Routes surface water follows downhill</span>
+                  </span>
+                </label>
+                <label class="check">
+                  <input type="checkbox" id="hand-toggle" />
+                  <span class="check__text">
+                    Height above nearest drainage
+                    <span class="check__note">Elevation relative to the nearest drainage path</span>
+                  </span>
+                </label>
+                <div id="terrain-legend"></div>
+              </fieldset>
+            </details>
+          </section>
 
-          <label class="check">
-            <input type="checkbox" id="boundary-toggle" checked />
-            <span>Show LGA boundary</span>
-          </label>
+          <section class="section tab-panel" role="tabpanel" id="panel-sites" aria-labelledby="tab-sites" hidden>
+            <h2 class="tab-panel__heading" id="hotspots-heading">Priority sites</h2>
+            <ol class="sites" id="hotspots"></ol>
+          </section>
 
-          <fieldset class="terrain" id="terrain-controls">
-            <legend class="label">Terrain</legend>
-            <label class="check">
-              <input type="checkbox" id="drainage-toggle" />
-              <span class="check__text">
-                Natural drainage paths
-                <span class="check__note">Routes surface water follows downhill</span>
-              </span>
-            </label>
-            <label class="check">
-              <input type="checkbox" id="hand-toggle" />
-              <span class="check__text">
-                Height above nearest drainage
-                <span class="check__note">Elevation relative to the nearest drainage path</span>
-              </span>
-            </label>
-            <div id="terrain-legend"></div>
-          </fieldset>
-        </section>
-
-        <section class="section" aria-labelledby="figure-heading" aria-live="polite">
-          <h2 id="figure-heading">Radar readings</h2>
-          <div id="figure"></div>
-          <div id="legend"></div>
-        </section>
-
-        <section class="section" aria-labelledby="hotspots-heading">
-          <h2 id="hotspots-heading">Largest flooded areas</h2>
-          <ol class="hotspots" id="hotspots"></ol>
-        </section>
+          <section class="section tab-panel" role="tabpanel" id="panel-history" aria-labelledby="tab-history" hidden>
+            <label class="label" for="history-filter">Local government area</label>
+            <select class="select" id="history-filter"></select>
+            <h2 class="tab-panel__heading">Radar passes</h2>
+            <ol class="history" id="history-passes"></ol>
+            <h2 class="tab-panel__heading">Your drawn areas</h2>
+            <p class="history__note">Saved in this browser only. Nobody else can see them.</p>
+            <ol class="history" id="history-areas"></ol>
+          </section>
+        </div>
 
         <section class="section">
           <details class="notice">

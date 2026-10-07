@@ -1,25 +1,36 @@
 import { el } from "./dom.js";
-import { formatDate, formatHectares } from "./format.js";
+import { formatDate } from "./format.js";
 import { createMap } from "./map.js";
 import { renderFigure, renderHotspots, renderLayerControls, renderLgaSelect, renderTerrainControls } from "./panel.js";
 import { defaultLayer, isLayerAvailable, readState, writeState } from "./state.js";
 import { nearbyLandmarks } from "./local-terrain.js";
 import { analyseSpot } from "./spot-terrain.js";
-import { STEPS, analyseArea } from "./area-runner.js";
-import { polygonAreaKm2 } from "./area-analysis.js";
-import { fullAnalysisEnabled, runFullAnalysis } from "./full-area.js";
-import { resetFull, showFullError, showFullProgress, showFullResult } from "./full-report.js";
+import { createAreaView } from "./area-view.js";
+import { findPass } from "./passes.js";
+import { loadRuns, removeRun } from "./history-store.js";
+import { renderHistory } from "./history-view.js";
+import { setupTabs, showTab } from "./tabs.js";
 import { open3d } from "./view3d.js";
 
 const DATA_ROOT = "data/";
 const NEARBY_MAX_M = 600;
 const NEARBY_LIMIT = 3;
-const FULL_MAX_KM2 = 10; // the server's limit (analysis/area_request.py)
 const SITE_OVERLAY_OPACITY = 0.45; // at street zoom the imagery under the flood shading must stay visible
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const cache = new Map();
 
 const $ = (id) => document.getElementById(id);
+
+// Browser storage can be blocked (private mode, site settings): fall back to a store that keeps nothing
+function browserStorage() {
+  try {
+    const storage = window.localStorage;
+    storage.getItem("probe");
+    return storage;
+  } catch {
+    return { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+  }
+}
 
 async function fetchJson(path) {
   if (cache.has(path)) return cache.get(path);
@@ -44,7 +55,7 @@ function showError(message) {
   $("figure").replaceChildren(el("p", { class: "status status--error", role: "alert", text: message }));
 }
 
-function layerData(lga, layer) {
+function layerData(lga, layer, passId) {
   if (layer === "suspects" && lga.suspects) {
     const base = lga.frequency;
     return {
@@ -57,15 +68,16 @@ function layerData(lga, layer) {
       overlayOpacity: 0.35,
     };
   }
-  if (layer === "standing" && lga.standing) {
-    const w = lga.standing;
+  const pass = layer === "standing" || layer === "event" ? findPass(lga, layer, passId) : null;
+  if (pass?.layer === "standing") {
+    const w = pass.data;
     return { ...w, subtitle: `still under water on ${formatDate(w.after)}`, alt: `Water still standing on ${formatDate(w.after)}` };
   }
   if (layer === "frequency" && lga.frequency) {
     return { ...lga.frequency, subtitle: `flooded in ${lga.frequency.repeat_min_years}+ seasons`, alt: "Years flooded" };
   }
-  if (layer === "event" && lga.events[0]) {
-    const e = lga.events[0];
+  if (pass?.layer === "event") {
+    const e = pass.data;
     return { ...e, subtitle: `under water on ${formatDate(e.date)}`, alt: `Flooding on ${formatDate(e.date)}` };
   }
   return null;
@@ -81,15 +93,17 @@ function renderSiteKey({ area, route }) {
 
 const siteTitle = (site) => (site.rank ? `${site.rank}. ${site.place}` : site.place);
 
-// Drainage assessment (priority sites) plus the local-ground sentence (any site or spot)
+// Report for the open site or tapped spot: its drainage assessment (priority sites) and the local-ground sentence
 function renderSiteReport(site, groundSentence) {
-  const lines = [...(site?.story ?? [])];
+  $("site-report").hidden = !site;
+  if (!site) return;
+  const lines = [...(site.story ?? [])];
   if (groundSentence) lines.push(groundSentence);
-  $("site-report").hidden = !lines.length;
-  if (!lines.length) return;
   $("site-report-place").textContent = siteTitle(site);
-  $("site-report-story").replaceChildren(...lines.map((line) => el("p", { text: line })));
-  $("sheet-content").scrollTop = 0;
+  $("site-report-story").replaceChildren(
+    ...(lines.length ? lines.map((line) => el("p", { text: line })) : [el("p", { class: "status", text: "Tracing where the water goes…" })])
+  );
+  $("site-report-caveat").hidden = !lines.length;
 }
 
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -162,6 +176,7 @@ function setupSheetToggle() {
   toggle.addEventListener("click", () => {
     const expanded = sheet.dataset.expanded !== "true";
     sheet.dataset.expanded = String(expanded);
+    document.body.classList.toggle("sheet-open", expanded);
     toggle.setAttribute("aria-expanded", String(expanded));
     toggle.textContent = expanded ? "Show map" : "Details";
   });
@@ -270,132 +285,6 @@ async function start() {
     await showGround(lga, hotspot, key, token);
   }
 
-  // Drawn-area report: runs once per drawn shape, with a progress bar while it works
-  let areaDone = null; // key of the area whose report is showing
-  function areaKey() {
-    return state.area ? `${state.lga}:${state.area.map((c) => c.join(",")).join(";")}` : null;
-  }
-
-  function setProgress(step) {
-    const percent = Math.round((step / STEPS.length) * 100);
-    $("area-progress").hidden = false;
-    $("area-progress").setAttribute("aria-valuenow", String(percent));
-    $("area-progress-bar").style.setProperty("width", `${percent}%`);
-    $("area-step").textContent = step < STEPS.length ? `Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}…` : "Done.";
-  }
-
-  function renderHollowList(hollows) {
-    $("area-hollows").replaceChildren(
-      ...hollows.map((hollow, i) =>
-        el("li", {}, [
-          el("button", {
-            class: "hotspot",
-            type: "button",
-            "aria-label": `Hollow ${i + 1}, up to ${hollow.maxDepth.toFixed(1)} m deep. Show on map`,
-            onclick: () => setState({ at: [hollow.lat, hollow.lon], area: null, site: null }),
-          }, [
-            el("span", { class: "hotspot__rank", text: String(i + 1) }),
-            el("span", { class: "hotspot__place" }, [
-              `Hollow up to ${hollow.maxDepth.toFixed(1)} m deep`,
-              ...(hollow.nearby ? [el("span", { class: "hotspot__nearby", text: `Near ${hollow.nearby}` })] : []),
-            ]),
-            el("span", { class: "hotspot__area", text: formatHectares(hollow.areaM2 / 1e4) }),
-          ]),
-        ])
-      )
-    );
-  }
-
-  // Full (server) analysis: started by the person, never from a shared link, since each run uses quota
-  let fullRun = null; // { controller } of the run in progress or shown
-  const fullIntro = $("full-intro").textContent.trim();
-  const fullEnabled = fullAnalysisEnabled();
-  $("full-run").hidden = true;
-  fullEnabled.then((enabled) => { $("full-run").hidden = !enabled; });
-
-  function stopFull() {
-    fullRun?.controller.abort();
-    fullRun = null;
-    map.clearFull();
-  }
-
-  function prepareFull() {
-    const km2 = polygonAreaKm2(state.area);
-    const tooBig = km2 > FULL_MAX_KM2;
-    $("full-start").textContent = "Run full analysis";
-    resetFull({
-      startable: !tooBig,
-      intro: tooBig
-        ? `The full analysis takes areas up to ${FULL_MAX_KM2} km²; this one is ${km2.toFixed(0)} km². Draw a smaller area to run it.`
-        : fullIntro,
-    });
-  }
-
-  async function startFull() {
-    if (!state.area) return;
-    stopFull();
-    const controller = new AbortController();
-    fullRun = { controller };
-    try {
-      const result = await runFullAnalysis({ ring: state.area, onProgress: showFullProgress, signal: controller.signal });
-      if (fullRun?.controller !== controller) return;
-      showFullResult(result, (i) => {
-        // On phones the sheet covers the map: lower it first so the site is in view
-        if (window.matchMedia("(max-width: 768px)").matches && $("sheet").dataset.expanded === "true") $("sheet-toggle").click();
-        map.focusGeometry(result.sites[i].geometry, reducedMotion.matches);
-      });
-      map.hideAreaRunoff();
-      map.showFull(result, reducedMotion.matches);
-    } catch (error) {
-      if (controller.signal.aborted || fullRun?.controller !== controller) return;
-      showFullError(error instanceof Error ? error.message : "The full analysis failed; please try again.");
-    }
-  }
-
-  async function renderArea(lga, landmarks) {
-    const key = areaKey();
-    $("area-report").hidden = !key;
-    $("draw-start").hidden = Boolean(key) || drawTool.active;
-    if (!key) {
-      areaDone = null;
-      stopFull();
-      map.clearArea();
-      return;
-    }
-    if (areaDone === key) return;
-    areaDone = key;
-    stopFull();
-    prepareFull();
-    // On phones the report lives in the bottom sheet: open it so the progress bar is visible
-    if (window.matchMedia("(max-width: 768px)").matches && $("sheet").dataset.expanded !== "true") $("sheet-toggle").click();
-    $("area-lines").replaceChildren();
-    $("area-hollows").replaceChildren();
-    $("sheet-content").scrollTop = 0;
-    map.setBasemap(basemap);
-    map.showArea({ ring: state.area }, reducedMotion.matches);
-    map.focusArea(state.area, reducedMotion.matches);
-    try {
-      const sites = lga.suspects ? await fetchJson(lga.suspects.list) : [];
-      const report = await analyseArea({
-        ring: state.area, lga, dataRoot: DATA_ROOT, landmarks, sites, onProgress: setProgress,
-        reducedMotion: reducedMotion.matches,
-      });
-      if (areaKey() !== key) return; // a newer area or view replaced this one
-      $("area-progress").hidden = true;
-      $("area-step").textContent = "";
-      $("area-lines").replaceChildren(...report.lines.map((line) => el("p", { text: line })));
-      renderHollowList(report.hollows);
-      map.showArea({ ring: state.area, ...report }, reducedMotion.matches);
-    } catch (error) {
-      if (areaKey() !== key) return;
-      $("area-progress").hidden = true;
-      $("area-step").textContent = "";
-      $("area-lines").replaceChildren(
-        el("p", { class: "status status--error", role: "alert", text: error instanceof Error ? error.message : "The area could not be analysed." })
-      );
-    }
-  }
-
   const drawTool = map.createDrawTool(({ active, count, canFinish }) => {
     $("draw-bar").hidden = !active;
     $("draw-undo").disabled = count === 0;
@@ -417,26 +306,65 @@ async function start() {
     setState({ site: null, at: null });
   }
 
+  const storage = browserStorage();
+  let historyFilter = "all";
+  const areaView = createAreaView({
+    map, storage, dataRoot: DATA_ROOT, fetchJson, reducedMotion,
+    getState: () => state, setState, onSaved: () => renderHistoryTab(),
+  });
+
+  function renderHistoryTab() {
+    renderHistory({
+      manifest,
+      runs: loadRuns(storage),
+      filter: historyFilter,
+      current: { lga: state.lga, passId: (state.layer === "event" || state.layer === "standing")
+        ? findPass(manifest.lgas.find((l) => l.slug === state.lga), state.layer, state.pass)?.id : null },
+      handlers: {
+        onFilter: (slug) => { historyFilter = slug; renderHistoryTab(); },
+        onOpenPass: (pass) => setState({ lga: pass.lga, layer: pass.layer, pass: pass.id, site: null, at: null, area: null, tab: "map" },
+          { refit: pass.lga !== state.lga }),
+        onOpenRun: (run) => setState({ lga: run.lga, area: run.ring, site: null, at: null }),
+        onRemoveRun: (run) => { removeRun(storage, run.id); renderHistoryTab(); },
+      },
+    });
+  }
+
+  // A site, spot or drawn area replaces the tabs with its report; Back returns to the tab
+  function renderView() {
+    const reporting = Boolean(state.site || state.at || state.area);
+    $("report-view").hidden = !reporting;
+    $("tab-view").hidden = reporting;
+    const tabNames = { map: "Map", sites: "Sites", history: "History" };
+    $("report-back-label").textContent = state.area ? "Close area" : `Back to ${tabNames[state.tab]}`;
+    showTab(state.tab);
+  }
+
   async function render(refit) {
     const token = ++renderToken;
     const lga = manifest.lgas.find((l) => l.slug === state.lga);
-    const data = layerData(lga, state.layer);
+    const data = layerData(lga, state.layer, state.pass);
 
     $("lga-title").textContent = lga.name;
     $("lga-meta").textContent = "Local Government Area · Rivers State";
     renderLgaSelect($("lga-select"), manifest, lga.slug, (slug) => {
       const next = manifest.lgas.find((l) => l.slug === slug);
       const layer = isLayerAvailable(next, state.layer) ? state.layer : defaultLayer(next);
-      setState({ lga: slug, layer, site: null, at: null, area: null }, { refit: true });
+      setState({ lga: slug, layer, pass: null, site: null, at: null, area: null }, { refit: true });
     });
-    renderLayerControls($("layer-controls"), lga, state.layer, (layer) => setState({ layer, site: null, at: state.at }));
-    renderFigure($("figure"), $("legend"), lga, state.layer);
+    renderView();
+    $("draw-start").hidden = Boolean(state.area) || drawTool.active;
+    renderLayerControls($("layer-controls"), lga, state.layer, state.pass, (patch) => setState({ ...patch, site: null }));
+    renderFigure($("figure"), $("legend"), lga, state.layer, state.pass);
+    renderHistoryTab();
+    if (state.drainage || state.hand) $("more-map").open = true;
     renderTerrainControls($("drainage-toggle"), $("hand-toggle"), $("terrain-legend"), lga, state);
     const terrain = lga.terrain;
     map.showHand(terrain && state.hand ? DATA_ROOT + terrain.hand_overlay : null, terrain?.hand_bounds);
     const overlayOpacity = state.site || state.at || state.area ? Math.min(data?.overlayOpacity ?? 1, SITE_OVERLAY_OPACITY) : data?.overlayOpacity;
     map.showOverlay(data?.overlay ? DATA_ROOT + data.overlay : null, data?.bounds, data?.alt, overlayOpacity);
-    if (refit && (data?.bounds || lga.events[0]?.bounds)) map.fitTo(data?.bounds ?? lga.events[0].bounds);
+    const anyBounds = data?.bounds ?? lga.frequency?.bounds ?? lga.events[0]?.bounds;
+    if (refit && anyBounds) map.fitTo(anyBounds);
 
     try {
       const [boundary, hotspots, drainage, suspectAreas, landmarks] = await Promise.all([
@@ -454,11 +382,16 @@ async function start() {
       map.showLandmarks(landmarks);
       map.showBoundary(boundary, state.boundary);
       // Every point, in every layer, opens the zoomed satellite site view
-      const select = (h) => setState({ site: h.rank, at: null, area: null });
+      const select = (h) => {
+        // On phones the open sheet covers the map: lower it so the chosen site is in view
+        if (window.matchMedia("(max-width: 768px)").matches && $("sheet").dataset.expanded === "true") $("sheet-toggle").click();
+        setState({ site: h.rank, at: null, area: null });
+      };
       map.showHotspots(hotspots, data?.subtitle ?? "", select);
       renderHotspots($("hotspots"), $("hotspots-heading"), hotspots, state.layer, select, lga);
+      $("sites-count").textContent = hotspots.length ? String(hotspots.length) : "";
       await renderSite(lga, hotspots, data, landmarks, token);
-      renderArea(lga, landmarks);
+      areaView.render(lga, landmarks, basemap);
     } catch (error) {
       if (token === renderToken) showError(error instanceof Error ? error.message : "Could not load layer data.");
     }
@@ -491,8 +424,8 @@ async function start() {
     const ring = drawTool.stop();
     if (ring) setState({ area: ring, site: null, at: null });
   });
-  $("area-clear").addEventListener("click", () => setState({ area: null }, { refit: true }));
-  $("full-start").addEventListener("click", startFull);
+  setupTabs((tab) => setState({ tab }));
+  $("report-back").addEventListener("click", () => (state.area ? setState({ area: null }) : deselect()));
   $("basemap-satellite").addEventListener("click", () => setBasemap("satellite"));
   $("basemap-street").addEventListener("click", () => setBasemap("street"));
   $("boundary-toggle").checked = state.boundary;

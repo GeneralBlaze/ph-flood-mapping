@@ -1,3 +1,5 @@
+import { findPass } from "./passes.js";
+
 const SMALL_AREA_HA = 100;
 const numberFormat = new Intl.NumberFormat("en-NG", { maximumFractionDigits: 0 });
 const smallFormat = new Intl.NumberFormat("en-NG", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -23,7 +25,7 @@ function repeatHectares(frequency) {
     .reduce((sum, [, ha]) => sum + ha, 0);
 }
 
-export function keyFigure(lga, layer) {
+export function keyFigure(lga, layer, passId = null) {
   if (layer === "suspects" && lga.suspects) {
     const n = lga.suspects.counts.suspect;
     return {
@@ -38,16 +40,16 @@ export function keyFigure(lga, layer) {
       caption: `flooded in ${f.repeat_min_years} or more of the rainy seasons ${yearSpan(f.years)}`,
     };
   }
-  if (layer === "standing" && lga.standing) {
-    const w = lga.standing;
+  const pass = layer === "standing" || layer === "event" ? findPass(lga, layer, passId) : null;
+  if (pass?.layer === "standing") {
+    const w = pass.data;
     return {
       value: formatHectares(w.hectares.standing),
       caption: `still under water on ${formatDate(w.after)}, after the rain of ${formatDate(w.before)}`,
     };
   }
-  const event = lga.events[0];
-  if (layer === "event" && event) {
-    return { value: formatHectares(event.flooded_ha), caption: `under standing water on ${formatDate(event.date)}` };
+  if (pass?.layer === "event") {
+    return { value: formatHectares(pass.data.flooded_ha), caption: `under standing water on ${formatDate(pass.date)}` };
   }
   return { value: "—", caption: "Choose a flood layer to see figures." };
 }

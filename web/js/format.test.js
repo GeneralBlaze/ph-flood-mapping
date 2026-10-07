@@ -38,17 +38,17 @@ test("keyFigure for frequency sums hectares at or above the repeat threshold", (
 });
 
 test("readState defaults to first LGA and the best available layer", () => {
-  assert.deepEqual(readState("", manifest), { lga: "obio-akpor", layer: "event", boundary: true, drainage: false, hand: false, at: null, area: null, site: null });
-  assert.deepEqual(readState("?lga=port-harcourt", manifest), { lga: "port-harcourt", layer: "frequency", boundary: true, drainage: false, hand: false, at: null, area: null, site: null });
+  assert.deepEqual(readState("", manifest), { lga: "obio-akpor", layer: "event", boundary: true, drainage: false, hand: false, at: null, area: null, site: null, pass: null, tab: "map" });
+  assert.deepEqual(readState("?lga=port-harcourt", manifest), { lga: "port-harcourt", layer: "frequency", boundary: true, drainage: false, hand: false, at: null, area: null, site: null, pass: null, tab: "map" });
 });
 
 test("readState rejects unknown or unavailable values", () => {
-  assert.deepEqual(readState("?lga=nowhere&layer=frequency", manifest), { lga: "obio-akpor", layer: "event", boundary: true, drainage: false, hand: false, at: null, area: null, site: null });
+  assert.deepEqual(readState("?lga=nowhere&layer=frequency", manifest), { lga: "obio-akpor", layer: "event", boundary: true, drainage: false, hand: false, at: null, area: null, site: null, pass: null, tab: "map" });
   assert.deepEqual(readState("?layer=<script>", manifest).layer, "event");
 });
 
 test("readState honours layer=none and boundary=0", () => {
-  assert.deepEqual(readState("?layer=none&boundary=0", manifest), { lga: "obio-akpor", layer: "none", boundary: false, drainage: false, hand: false, at: null, area: null, site: null });
+  assert.deepEqual(readState("?layer=none&boundary=0", manifest), { lga: "obio-akpor", layer: "none", boundary: false, drainage: false, hand: false, at: null, area: null, site: null, pass: null, tab: "map" });
 });
 
 test("writeState produces a stable query string", () => {
@@ -152,4 +152,25 @@ test("writeState encodes a drawn area", () => {
   const query = writeState({ lga: "obio-akpor", layer: "suspects", boundary: true, drainage: false, hand: false, site: null, at: null,
     area: [[4.8, 7.0], [4.8, 7.01], [4.81, 7.01]] });
   assert.equal(query, "?lga=obio-akpor&layer=suspects&area=4.80000%2C7.00000%3B4.80000%2C7.01000%3B4.81000%2C7.01000");
+});
+
+test("readState keeps a valid pass and tab, and drops unknown ones", () => {
+  const twoFloods = { lgas: [{ slug: "x", name: "X", frequency: null,
+    events: [{ date: "2026-09-29", flooded_ha: 1 }, { date: "2026-08-14", flooded_ha: 2 }] }] };
+  assert.equal(readState("?layer=event&pass=flood-2026-08-14", twoFloods).pass, "flood-2026-08-14");
+  assert.equal(readState("?layer=event&pass=flood-1999-01-01", twoFloods).pass, null);
+  assert.equal(readState("?tab=history", twoFloods).tab, "history");
+  assert.equal(readState("?tab=evil", twoFloods).tab, "map");
+});
+
+test("writeState includes pass and tab only when they are not the defaults", () => {
+  const base = { lga: "x", layer: "event", boundary: true, drainage: false, hand: false, site: null };
+  assert.equal(writeState({ ...base, pass: null, tab: "map" }), "?lga=x&layer=event");
+  assert.equal(writeState({ ...base, pass: "flood-2026-08-14", tab: "sites" }), "?lga=x&layer=event&pass=flood-2026-08-14&tab=sites");
+});
+
+test("keyFigure reports the chosen pass", () => {
+  const lga = { events: [{ date: "2026-09-29", flooded_ha: 923.7 }, { date: "2026-08-14", flooded_ha: 410.2 }] };
+  assert.equal(keyFigure(lga, "event", "flood-2026-08-14").value, "410 ha");
+  assert.equal(keyFigure(lga, "event", null).value, "924 ha");
 });
